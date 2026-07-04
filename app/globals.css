@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0e14;
+  --surface: #121826;
+  --surface-2: #1a2234;
+  --border: #232c3f;
+  --text: #e7ecf3;
+  --muted: #8b97ad;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  height: 100%;
+  /* The app shell (see layout.tsx) owns scrolling, so the document itself never
+     scrolls. That keeps the mobile browser toolbar from collapsing mid-scroll and
+     shoving the fixed bottom nav up into the page. */
+  overflow: hidden;
+  scroll-padding-top: 4.5rem;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  height: 100%;
+  overflow: hidden; /* scrolling lives inside the shell, not the document */
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  overscroll-behavior-y: none;
+}
+
+/* Hide scrollbars on horizontal chip rows but keep scrollability */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbars app-wide (the phone frame + page) — still scrollable */
+* {
+  scrollbar-width: none; /* Firefox / standards */
+}
+*::-webkit-scrollbar {
+  display: none; /* Chrome / Safari / Edge */
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

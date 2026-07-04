@@ -1,0 +1,55 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# ---------------------------------------------------------------------------
+# REAL FINANCIAL DATA — never commit.
+# All of data/*.json is generated locally by the Python bridge (holdings,
+# transactions, trade history, account values, etc.) and contains live account
+# information. It is intentionally NOT versioned: the app reads it at runtime
+# and falls back to the bundled example dataset (lib/example.ts) when absent.
+# The .gitkeep keeps the empty folder so a fresh clone/Pi has somewhere to write.
+/data/*.json
+!/data/.gitkeep
+
+# Windows Explorer folder-settings artifacts
+desktop.ini
+**/desktop.ini
