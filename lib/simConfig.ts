@@ -10,7 +10,7 @@
 // 0 disables the vol term entirely, so Simulate falls back to the pure Δ/Γ estimate.
 import { useSyncExternalStore } from "react";
 
-const DEFAULT_SKEW = 1.0; // ~1 vol point of IV per 1% move — a sane, tunable starting point
+const DEFAULT_SKEW = 0.7; // ~0.7 vol points of IV per 1% move — a tunable starting point
 let ivSkew = DEFAULT_SKEW;
 
 const listeners = new Set<() => void>();
