@@ -209,7 +209,7 @@ function BoardRow({ row }: { row: AmBoardRow }) {
             </div>
           )}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border/60 pt-2 text-[11px] text-muted">
-            <span>Trend strength</span><span className="text-right text-text">{Math.round(row.trend.strength)} · +{row.trend.pctAbove200.toFixed(1)}% vs 200DMA</span>
+            <span>Trend strength</span><span className="text-right text-text">{Math.round(row.trend.strength)} · {row.trend.pctAbove200 >= 0 ? "+" : ""}{row.trend.pctAbove200.toFixed(1)}% vs 200DMA</span>
             <span>18-mo return</span><span className={`text-right ${pctClass(row.trend.ret18mo)}`}>{signed(row.trend.ret18mo)}</span>
             <span>IV / RV</span><span className="text-right text-text">{row.iv != null ? `${Math.round(row.iv * 100)} / ${Math.round((row.rv ?? 0) * 100)}` : "—"}{row.vrpRatio ? ` (×${row.vrpRatio})` : ""}</span>
             <span>IV Rank</span><span className="text-right text-text">{row.ivr != null ? `${Math.round(row.ivr)} (vs 1y)` : `building${row.ivrSamples ? ` ${row.ivrSamples}` : ""}`}</span>
