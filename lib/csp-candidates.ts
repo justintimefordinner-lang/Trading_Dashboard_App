@@ -1,5 +1,5 @@
 // Server-side loader for screened CSP candidates (data/csp-candidates.json),
-// written by Claude Code via the Robinhood MCP. See REFRESH.md for regeneration.
+// written by the data bridge.
 import fs from "node:fs";
 import path from "node:path";
 import type { CSPCandidatesFile } from "./types";

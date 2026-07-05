@@ -3,12 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // DEV-SERVER ONLY: origins allowed to load the dev runtime (HMR/RSC/assets).
   // Has no effect on the production server (`next start`), which serves any origin.
-  // Includes the home Wi-Fi IPs plus Tailscale. If reaching the phone by a raw
-  // 100.x.y.z Tailscale IP rather than the MagicDNS name, add that exact IP here.
+  // Add the addresses you use to reach the dev server from other devices (e.g.
+  // your phone). Examples:
+  //   "192.168.1.42",            // your machine's LAN IP
+  //   "my-pc.tailXXXX.ts.net",   // a specific Tailscale MagicDNS host
   allowedDevOrigins: [
-    "192.168.0.50",
-    "172.20.176.1",
-    "*.ts.net", // Tailscale MagicDNS hostnames (e.g. my-pc.tailXXXX.ts.net)
+    "*.ts.net", // any Tailscale MagicDNS hostname
   ],
 };
 

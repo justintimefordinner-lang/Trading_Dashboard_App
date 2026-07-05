@@ -44,7 +44,7 @@ export default async function VixPage() {
 
         {!vix ? (
           <Card className="mt-4 px-4 py-5 text-center text-sm text-muted">
-            No VIX snapshot found. Ask Claude Code to refresh the volatility posture.
+            No VIX snapshot found. Run the data bridge to refresh the volatility posture.
           </Card>
         ) : (
           <VixBody

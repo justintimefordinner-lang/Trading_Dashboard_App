@@ -1,6 +1,5 @@
 // Server-side loader for the VIX/volatility snapshot (data/vix.json), refreshed
-// by Claude Code from the Robinhood connector (VIX index + SPY historicals).
-// See REFRESH.md → "Refreshing the VIX posture".
+// by the data bridge (VIX index + SPY historicals).
 import fs from "node:fs";
 import path from "node:path";
 import type { VixSnapshot } from "./vix";

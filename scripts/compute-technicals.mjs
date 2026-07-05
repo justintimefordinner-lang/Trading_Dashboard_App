@@ -1,6 +1,6 @@
 // Computes CSP technical signals from get_equity_historicals output.
 //
-// The Robinhood MCP is the canonical source for technicals. Claude Code pulls
+// The data bridge is the canonical source for technicals. the data bridge pulls
 // `get_equity_historicals` (interval=day, ≥50 trading days), saves the closes
 // (and optional lows) per symbol to a JSON file in this shape:
 //

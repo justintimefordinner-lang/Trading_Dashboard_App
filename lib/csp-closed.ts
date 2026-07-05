@@ -1,5 +1,5 @@
 // Server-side loader for closed CSP history (data/csp-closed.json), reconstructed
-// by Claude Code from the connector's option order history. See REFRESH.md.
+// by the data bridge from the broker's option order history.
 import fs from "node:fs";
 import path from "node:path";
 import type { ClosedCSPFile } from "./types";

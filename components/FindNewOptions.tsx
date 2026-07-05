@@ -47,7 +47,7 @@ function CspNew({ candidates, meta }: { candidates: CSPCandidate[]; meta: { dteB
     <div className="mt-4">
       {candidates.length === 0 ? (
         <Card className="px-4 py-5 text-center text-sm text-muted">
-          No candidates yet. Ask Claude Code to run the CSP screen.
+          No candidates yet. Run the data bridge to populate candidates.
         </Card>
       ) : (
         <>
@@ -67,7 +67,7 @@ function CspNew({ candidates, meta }: { candidates: CSPCandidate[]; meta: { dteB
           <li>Past performance and screener scores do not guarantee future results.</li>
           <li>Assignment can occur any time before expiration — don&apos;t assume European-style behavior.</li>
           <li>A CSP carries full downside: if the stock falls hard, you&apos;re still obligated to buy at the strike.</li>
-          <li>This app never places trades — sell-to-open in Robinhood yourself.</li>
+          <li>This app never places trades — sell-to-open with your broker yourself.</li>
         </ul>
       </Card>
     </div>
@@ -109,7 +109,7 @@ function LeapNew({ ideas }: { ideas: ResearchIdea[] }) {
           <li>LEAPS carry full premium risk — a long call can expire worthless.</li>
           <li>Deep-ITM ≠ safe: high delta means large dollar moves with the underlying.</li>
           <li>Roll before ~12 months to expiry to stay ahead of theta acceleration.</li>
-          <li>This app never places trades — buy-to-open in Robinhood yourself.</li>
+          <li>This app never places trades — buy-to-open with your broker yourself.</li>
         </ul>
       </Card>
     </div>

@@ -1,6 +1,5 @@
 // Server-side loader for closed LEAP history (data/leaps-closed.json),
-// reconstructed by Claude Code from the connector's option order history.
-// See REFRESH.md → "Regenerating closed-LEAP history".
+// reconstructed by the data bridge from the broker's option order history.
 import fs from "node:fs";
 import path from "node:path";
 import type { ClosedLeapFile } from "./types";

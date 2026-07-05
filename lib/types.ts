@@ -1,7 +1,7 @@
 // Domain models for the portfolio app.
-// NOTE: Data currently comes from a static seed (lib/data.ts) captured from the
-// live Robinhood MCP connector. The shapes below are the contract the UI relies
-// on, so the seed can later be swapped for a real backend without UI changes.
+// Data is loaded from data/*.json (written by the data bridge) at runtime, with a
+// built-in example dataset as a fallback. The shapes below are the contract the UI
+// relies on, independent of where the data comes from.
 
 export interface Account {
   id: string;
@@ -98,7 +98,7 @@ export interface ResearchIdea {
 /**
  * A screened cash-secured-put candidate. Raw inputs only — the composite score
  * is computed at render time by lib/csp-model.ts so the breakdown is always
- * visible. Fields the Robinhood connector can't supply (IV Rank, technicals,
+ * visible. Fields the data bridge can't supply (IV Rank, technicals,
  * event calendar) are nullable and the score renormalizes over what's present.
  */
 export interface CSPCandidate {
@@ -284,7 +284,7 @@ export interface ClosedStockFile {
 export interface SnapshotMeta {
   generatedAt: string; // ISO timestamp the data was pulled
   pricesAsOf: string; // human label, e.g. "2026-06-12 close"
-  source: string; // "robinhood-mcp" | "seed"
+  source: string; // "schwab-bridge" | "seed"
 }
 
 /** Per-account market data. */
@@ -294,7 +294,7 @@ export interface AccountData {
   options: OptionPosition[];
   valueHistory: ValuePoint[];
   /**
-   * Per-coin crypto holdings. Optional: the Robinhood MCP connector exposes no
+   * Per-coin crypto holdings. Optional: the data bridge exposes no
    * crypto-positions read tool, so this is absent unless seeded by hand. When
    * absent, the UI falls back to summary.cryptoValue (aggregate only).
    */
@@ -302,9 +302,8 @@ export interface AccountData {
 }
 
 /**
- * The live, refreshable market data the UI renders. Produced by Claude Code via
- * the Robinhood MCP connector and written to data/snapshot.json. Research ideas
- * are app content (not market data) and stay in lib/data.ts.
+ * The live, refreshable market data the UI renders. Produced by the data bridge
+ * and written to data/snapshot.json.
  *
  * `data` is keyed by account id (see `accounts[].id`).
  */

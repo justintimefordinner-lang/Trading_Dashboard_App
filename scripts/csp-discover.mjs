@@ -8,10 +8,10 @@
 //   node scripts/csp-discover.mjs AMD MU FSLR ...  → explicit tickers
 //
 // Output: qualifiers ranked by HV (richest premium first). Feed the top names to
-// the Robinhood MCP option screen and write data/csp-candidates.json. See REFRESH.md.
+// the data bridge option screen and write data/csp-candidates.json.
 //
-// This is the BROAD scanner (fast, no MCP). Per-candidate technicals for the app
-// are recomputed from the connector via get_equity_historicals → compute-technicals.mjs.
+// This is the BROAD scanner (fast, no broker calls). Per-candidate technicals for the
+// app are recomputed from the broker's historicals → compute-technicals.mjs.
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";

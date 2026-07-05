@@ -4,7 +4,7 @@
 // testable TypeScript. The composite score is computed here (not baked into the
 // data) so the UI can always show *why* a candidate scored the way it did.
 //
-// Components the Robinhood connector can't supply (IV Rank, technicals, event
+// Components the data bridge can't supply (IV Rank, technicals, event
 // calendar) are scored as `null` and EXCLUDED from the weighted total, which is
 // renormalized over the available weight. `availableWeight` reports coverage.
 // ---------------------------------------------------------------------------

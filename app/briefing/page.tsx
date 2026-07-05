@@ -20,7 +20,7 @@ export default function BriefingPage() {
   return (
     <main className="px-4">
       <PageHeader
-        title="Morning Brief — Thanks Ralph!"
+        title="Morning Brief"
         subtitle={
           report ? (
             <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
