@@ -186,7 +186,7 @@ function BoardRow({ row }: { row: AmBoardRow }) {
                 <span className="text-right text-[9px] uppercase text-muted/70">Strike</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">BBσ</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">Prem%</span>
-                <span className="text-right text-[9px] uppercase text-muted/70">Pad %</span>
+                <span className="text-right text-[9px] uppercase text-muted/70">To Strk</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">Ann%</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">OI</span>
                 {row.ladder.map((L) => (

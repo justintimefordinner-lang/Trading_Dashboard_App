@@ -36,13 +36,6 @@ const CSP_FILTERS: { key: CspFilter; label: string; active: string; idle: string
     idle: "bg-amber-500/10 text-amber-300 ring-amber-500/30 active:bg-amber-500/20",
     dot: "bg-amber-500",
   },
-  {
-    key: "hold",
-    label: "Hold",
-    active: "bg-sky-500/25 text-sky-100 ring-sky-500/50",
-    idle: "bg-surface-2 text-muted ring-border active:bg-surface-2/70",
-    dot: "bg-sky-500",
-  },
 ];
 
 export type CspSortKey = "ticker" | "bb" | "dte" | "coll" | "plpct" | "pldollar" | "tostrike" | "yr";
