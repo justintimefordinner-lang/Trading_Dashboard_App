@@ -181,21 +181,23 @@ function BoardRow({ row }: { row: AmBoardRow }) {
               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted/80">
                 Put ladder{c ? ` · ${c.exp} · ${c.dte}d` : ""}
               </div>
-              <div className="grid grid-cols-[1.7rem_0.95fr_0.85fr_0.9fr_0.9fr_0.9fr] gap-x-1.5 text-[11px]">
+              <div className="grid grid-cols-[1.7rem_0.95fr_0.85fr_0.9fr_0.9fr_0.9fr_0.9fr] gap-x-1.5 text-[11px]">
                 <span className="text-[9px] uppercase text-muted/70">Δ</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">Strike</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">BBσ</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">Prem%</span>
+                <span className="text-right text-[9px] uppercase text-muted/70">To Strike</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">Ann%</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">OI</span>
                 {row.ladder.map((L) => (
                   <Fragment key={L.dTarget}>
-                    <span className="font-medium text-text">{L.dTarget}Δ</span>
+                    <span className="font-medium text-text">{Math.round(Math.abs(L.delta) * 100)}Δ</span>
                     <span className="tabular text-right text-text">${L.strike}</span>
                     <span className={`tabular text-right ${bbClass(L.bbSigma)}`}>
                       {L.bbSigma != null ? `${L.bbSigma > 0 ? "+" : ""}${L.bbSigma.toFixed(1)}` : "—"}
                     </span>
                     <span className="tabular text-right text-text">{L.premPct.toFixed(2)}</span>
+                    <span className="tabular text-right text-muted">{row.last ? `${((L.strike - row.last) / row.last * 100).toFixed(1)}%` : "—"}</span>
                     <span className={`tabular text-right ${annClass(L.annPct)}`}>{L.annPct != null ? L.annPct.toFixed(1) : "—"}</span>
                     <span className="tabular text-right text-muted">{L.oi.toLocaleString()}</span>
                   </Fragment>
