@@ -10,6 +10,7 @@ import { AccountSwitcher } from "@/components/AccountSwitcher";
 import { PortfolioFit } from "@/components/PortfolioFit";
 import { AvailableCash } from "@/components/AvailableCash";
 import { getSnapshot } from "@/lib/snapshot";
+import { dailyThetaBreakdown } from "@/lib/theta";
 import { getSelectedAccount } from "@/lib/account";
 import { getVixSnapshot } from "@/lib/vix-data";
 import { getRefreshStatus } from "@/lib/refresh-status";
@@ -56,6 +57,7 @@ export default async function HomePage() {
     .reduce((s, o) => s + cspCollateral(o), 0);
   const cspCount = options.filter((o) => o.kind === "csp" && !isCashSettledIndex(o.symbol)).length;
   const spreadRisk = spreadRiskCapital(options);
+  const theta = dailyThetaBreakdown(options);
   // Capital deployed in options strategies: long LEAP/hedge value + CSP collateral
   // + spread defined risk. (Distinct from summary.optionsValue, the net mark.)
   const optionsCapital = leapCallsValue + hedgeValue + cspCollateralValue + spreadRisk;
@@ -210,14 +212,23 @@ export default async function HomePage() {
           }
           pct={share(summary.cash)}
         />
-        <Link href="/crypto" className="block active:opacity-80">
-          <Stat
-            label="Crypto ›"
-            value={<Amt>{fmtMoney(summary.cryptoValue)}</Amt>}
-            sub="aggregate"
-            pct={share(summary.cryptoValue)}
-          />
-        </Link>
+        <Stat
+          label="Total theta / day"
+          value={<Amt>{`${theta.total >= 0 ? "+" : "−"}${fmtMoney(Math.abs(theta.total))}`}</Amt>}
+          tone={theta.total >= 0 ? "pos" : "neg"}
+          sub={
+            <>
+              Credit{" "}
+              <span className="text-emerald-400">
+                <Amt>{fmtMoney(theta.credit)}</Amt>
+              </span>{" "}
+              · Debit{" "}
+              <span className="text-rose-400">
+                <Amt>{fmtMoney(Math.abs(theta.debit))}</Amt>
+              </span>
+            </>
+          }
+        />
       </div>
 
       {/* Quick access — CSPs are the core strategy, so surface them up top. */}

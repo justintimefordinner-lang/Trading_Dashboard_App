@@ -19,17 +19,23 @@ import {
 } from "@/lib/calc";
 import type { OptionPosition } from "@/lib/types";
 
-// DTE buckets, soonest first. Exported so the parent filters by the same edges.
-export const CASH_BUCKETS: { label: string; test: (d: number) => boolean }[] = [
-  { label: "≤7d", test: (d) => d <= 7 },
-  { label: "8–14d", test: (d) => d <= 14 },
-  { label: "15–30d", test: (d) => d <= 30 },
-  { label: "31–45d", test: (d) => d <= 45 },
-  { label: "46d+", test: () => true },
+// Six Monday-anchored weekly buckets: the current calendar week (Mon–Sun), then each
+// of the next four weeks (≈35 days out), then everything beyond. Uniform 7-day blocks
+// so cash-free dates spread out by week instead of piling into one wide window.
+export const CASH_BUCKETS: { label: string }[] = [
+  { label: "This wk" },
+  { label: "wk 2" },
+  { label: "wk 3" },
+  { label: "wk 4" },
+  { label: "wk 5" },
+  { label: "35d+" },
 ];
 export function cashBucketIndex(dte: number): number {
-  for (let i = 0; i < CASH_BUCKETS.length; i++) if (CASH_BUCKETS[i].test(dte)) return i;
-  return CASH_BUCKETS.length - 1;
+  // Days remaining in the current Mon–Sun week (6 on Monday … 0 on Sunday). Weeks
+  // start Monday, so the current week absorbs everything through the coming Sunday.
+  const daysLeftThisWeek = (7 - new Date().getDay()) % 7;
+  if (dte <= daysLeftThisWeek) return 0;
+  return Math.min(CASH_BUCKETS.length - 1, 1 + Math.floor((dte - daysLeftThisWeek - 1) / 7));
 }
 
 // Render order for the stacked segments: safest → riskiest, so a tall blue top
@@ -87,7 +93,7 @@ export function CspCashPlan({
         )}
       </div>
 
-      <div className="mt-3 grid grid-cols-5 gap-2">
+      <div className="mt-3 grid grid-cols-6 gap-2">
         {cols.map((c, i) => {
           const isSel = selected === i;
           const dim = selected != null && !isSel;
