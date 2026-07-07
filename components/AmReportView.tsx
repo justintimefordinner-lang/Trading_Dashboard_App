@@ -33,7 +33,7 @@ function bbClass(sigma: number | null | undefined): string {
 }
 function timeOnly(iso: string): string {
   try {
-    return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Denver" });
   } catch {
     return "";
   }

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 function asOfLabel(iso: string): string {
   try {
-    return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Denver" });
   } catch {
     return iso;
   }

@@ -53,6 +53,7 @@ export interface CoveredCallQuote {
   premPct: number; // mark ÷ spot, %
   annPct: number | null; // premPct annualized (×365/dte)
   oi: number;
+  bbSigma?: number | null; // this call strike's σ from the underlying's 20-day mean
 }
 
 export interface CryptoHolding {

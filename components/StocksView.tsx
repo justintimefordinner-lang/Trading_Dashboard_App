@@ -177,25 +177,14 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                       {isOpen && (
                         <div className="bg-surface-2/30 px-3 py-3 text-[12px]">
                           <div className="grid grid-cols-2 gap-x-5 gap-y-1.5">
+                            <Detail k="Avg" v={<Amt>{`$${e.avgCost.toFixed(2)}`}</Amt>} />
                             <Detail k="Last" v={<Amt>{`$${e.price.toFixed(2)}`}</Amt>} />
-                            <Detail k="Cost basis" v={<Amt>{fmtMoney(equityCost(e))}</Amt>} />
                             {e.dayChange != null && (
                               <Detail
                                 k="Day change"
                                 v={
                                   <span className={e.dayChange >= 0 ? "text-emerald-300" : "text-rose-300"}>
                                     <Amt>{`${e.dayChange >= 0 ? "+" : "−"}$${Math.abs(e.dayChange).toFixed(2)}`}</Amt>/sh
-                                  </span>
-                                }
-                              />
-                            )}
-                            {e.bbSigma != null && (
-                              <Detail
-                                k="BB pos"
-                                v={
-                                  <span className={sigmaTone(e.bbSigma)}>
-                                    {e.bbSigma > 0 ? "+" : ""}
-                                    {e.bbSigma.toFixed(1)}σ
                                   </span>
                                 }
                               />
@@ -214,9 +203,10 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted/80">
                                 Covered call · ~30Δ
                               </div>
-                              <div className="grid grid-cols-[2rem_1fr_1fr_1fr_1fr] gap-x-2.5 gap-y-1 text-[11px]">
+                              <div className="grid grid-cols-[1.8rem_1fr_0.9fr_1fr_1fr_1fr] gap-x-2 gap-y-1 text-[11px]">
                                 <span className="text-[9px] uppercase text-muted/70">Exp</span>
                                 <span className="text-right text-[9px] uppercase text-muted/70">Strike</span>
+                                <span className="text-right text-[9px] uppercase text-muted/70">BBσ</span>
                                 <span className="text-right text-[9px] uppercase text-muted/70">Prem</span>
                                 <span className="text-right text-[9px] uppercase text-muted/70">Prem%</span>
                                 <span className="text-right text-[9px] uppercase text-muted/70">Ann%</span>
@@ -224,6 +214,9 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                                   <Fragment key={cc.targetDte}>
                                     <span className="font-medium text-text">{cc.dte}d</span>
                                     <span className="tabular text-right text-text">${cc.strike}</span>
+                                    <span className={`tabular text-right ${cc.bbSigma != null ? sigmaTone(cc.bbSigma) : "text-muted"}`}>
+                                      {cc.bbSigma != null ? `${cc.bbSigma > 0 ? "+" : ""}${cc.bbSigma.toFixed(1)}` : "—"}
+                                    </span>
                                     <span className="tabular text-right text-text">
                                       <Amt>{`$${cc.mark.toFixed(2)}`}</Amt>
                                     </span>
