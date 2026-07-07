@@ -59,6 +59,8 @@ export default async function HomePage() {
   const cspCount = options.filter((o) => o.kind === "csp" && !isCashSettledIndex(o.symbol)).length;
   const spreadRisk = spreadRiskCapital(options);
   const theta = dailyThetaBreakdown(options);
+  // Cash not tied up securing CSPs/spreads. $0 once the account is fully deployed on margin.
+  const uncommittedCash = Math.max(0, summary.cash - cspCollateralValue - spreadRisk);
   // Capital deployed in options strategies: long LEAP/hedge value + CSP collateral
   // + spread defined risk. (Distinct from summary.optionsValue, the net mark.)
   const optionsCapital = leapCallsValue + hedgeValue + cspCollateralValue + spreadRisk;
@@ -202,7 +204,7 @@ export default async function HomePage() {
         </Link>
         <BuyingPowerStat
           optionsBuyingPower={summary.optionsBuyingPower ?? summary.buyingPower}
-          cash={summary.cash}
+          uncommittedCash={uncommittedCash}
           marginUsed={marginUsed}
           totalValue={summary.totalValue}
         />

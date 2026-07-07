@@ -10,21 +10,24 @@ import { useMarginMode } from "@/components/margin-mode";
 
 export function BuyingPowerStat({
   optionsBuyingPower,
-  cash,
+  uncommittedCash,
   marginUsed,
   totalValue,
 }: {
   optionsBuyingPower: number;
-  cash: number;
+  uncommittedCash: number;
   marginUsed: number;
   totalValue: number;
 }) {
   const { marginAware } = useMarginMode();
   const share = (v: number) => (totalValue > 0 ? `${Math.round((v / totalValue) * 100)}%` : "0%");
 
-  // Liquidity only → this tile becomes plain cash; no buying power, no margin.
+  // Liquidity only → uncommitted cash (cash not tied up in CSP/spread collateral);
+  // shows $0 when the account is fully deployed on margin. No buying power, no margin line.
   if (!marginAware) {
-    return <Stat label="Cash" value={<Amt>{fmtMoney(cash)}</Amt>} pct={share(cash)} />;
+    return (
+      <Stat label="Uncommitted cash" value={<Amt>{fmtMoney(uncommittedCash)}</Amt>} pct={share(uncommittedCash)} />
+    );
   }
 
   // Margin-aware → options buying power with its margin-utilization line (no cash).
@@ -38,7 +41,7 @@ export function BuyingPowerStat({
       pct={share(optionsBuyingPower)}
       sub={
         <>
-          <Amt>{`$${Math.round(marginUsed / 1000)}K`}</Amt> margin{" "}
+          <Amt>{`$${Math.round(marginUsed / 1000)}K`}</Amt> <span className="font-semibold">used margin</span>{" "}
           <span className={marginColor}>{Math.round(marginPct * 100)}%</span>
         </>
       }
