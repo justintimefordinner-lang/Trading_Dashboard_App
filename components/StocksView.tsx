@@ -8,6 +8,7 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { Card, SectionTitle, Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
+import { DataRefresh } from "@/components/DataRefresh";
 import { compactMoney } from "@/components/OptionRow";
 import { ClosedStocks } from "@/components/ClosedStocks";
 import { equityCost, equityPnl, equityPnlPct, equityValue, fmtMoney } from "@/lib/calc";
@@ -40,7 +41,7 @@ function Caret({ on, dir }: { on: boolean; dir: "asc" | "desc" }) {
   return <span className={`text-[7px] ${on ? "text-text" : "text-transparent"}`}>{dir === "asc" ? "▲" : "▼"}</span>;
 }
 
-export function StocksView({ equities, closed, initialStatus = "open", closedMode, closedMonths }: { equities: Equity[]; closed: ClosedStock[]; initialStatus?: Status; closedMode?: "all" | "ytd" | "months" | "today"; closedMonths?: number }) {
+export function StocksView({ equities, closed, initialStatus = "open", closedMode, closedMonths, laddersNextAt }: { equities: Equity[]; closed: ClosedStock[]; initialStatus?: Status; closedMode?: "all" | "ytd" | "months" | "today"; closedMonths?: number; laddersNextAt?: string }) {
   const [status, setStatus] = useState<Status>(initialStatus);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("value");
@@ -128,7 +129,10 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
             />
           </div>
 
-          <SectionTitle>Holdings</SectionTitle>
+          <SectionTitle>
+            Holdings
+            <DataRefresh nextAt={laddersNextAt} />
+          </SectionTitle>
           {rows.length === 0 ? (
             <Card className="px-4 py-5 text-center text-sm text-muted">No stock holdings in this account.</Card>
           ) : (

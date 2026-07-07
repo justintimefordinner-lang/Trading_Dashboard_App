@@ -310,6 +310,7 @@ export interface SnapshotMeta {
   generatedAt: string; // ISO timestamp the data was pulled
   pricesAsOf: string; // human label, e.g. "2026-06-12 close"
   source: string; // "schwab-bridge" | "seed"
+  coveredCallsNextAt?: string | null; // ISO — when the covered-call ladders next refresh; null off-hours
 }
 
 /** Per-account market data. */

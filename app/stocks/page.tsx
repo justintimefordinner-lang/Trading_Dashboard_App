@@ -37,7 +37,7 @@ export default async function StocksPage({ searchParams }: { searchParams: Promi
           right={<BackLink />}
         />
         <TickerBar tickers={tickers} active={sym} base="/stocks" />
-        <StocksView equities={equities} closed={closed} initialStatus={view === "closed" ? "closed" : "open"} closedMode={closedMode} closedMonths={closedMonths} />
+        <StocksView equities={equities} closed={closed} initialStatus={view === "closed" ? "closed" : "open"} closedMode={closedMode} closedMonths={closedMonths} laddersNextAt={snap.meta.coveredCallsNextAt ?? undefined} />
 
         <Link href="/research?vehicle=Covered" className="mt-3 block active:opacity-80">
           <Card className="flex items-center justify-between px-4 py-3">
