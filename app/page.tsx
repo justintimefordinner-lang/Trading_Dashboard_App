@@ -8,6 +8,7 @@ import type { DonutSlice } from "@/components/charts";
 import { Amt, HideButton } from "@/components/privacy";
 import { AccountSwitcher } from "@/components/AccountSwitcher";
 import { PortfolioFit } from "@/components/PortfolioFit";
+import { BuyingPowerStat } from "@/components/BuyingPowerStat";
 import { AvailableCash } from "@/components/AvailableCash";
 import { getSnapshot } from "@/lib/snapshot";
 import { dailyThetaBreakdown } from "@/lib/theta";
@@ -199,15 +200,11 @@ export default async function HomePage() {
             pct={share(optionsCapital)}
           />
         </Link>
-        <Stat
-          label="Options buying power"
-          value={<Amt>{fmtMoney(summary.optionsBuyingPower ?? summary.buyingPower)}</Amt>}
-          sub={
-            <>
-              <Amt>{fmtMoney(summary.cash)}</Amt> cash · <Amt>{`$${Math.round(marginUsed / 1000)}K`}</Amt> margin used
-            </>
-          }
-          pct={share(summary.optionsBuyingPower ?? summary.buyingPower)}
+        <BuyingPowerStat
+          optionsBuyingPower={summary.optionsBuyingPower ?? summary.buyingPower}
+          cash={summary.cash}
+          marginUsed={marginUsed}
+          totalValue={summary.totalValue}
         />
         <Stat
           label="Total theta / day"
