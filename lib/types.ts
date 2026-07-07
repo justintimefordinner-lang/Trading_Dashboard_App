@@ -29,6 +29,20 @@ export interface Equity {
   avgCost: number; // average cost per share
   price: number; // latest close per share
   dayChange?: number | null; // per-share $ move today (vs prior close), for Top Movers
+  coveredCalls?: CoveredCallQuote[]; // ~30Δ call premiums at 14/21/30 DTE (holdings ≥100 sh)
+}
+
+// One ~30-delta covered-call quote at a target tenor, written by the bridge for held
+// stock of ≥100 shares. Premiums refresh on a short cache during market hours.
+export interface CoveredCallQuote {
+  targetDte: number; // requested tenor (14 | 21 | 30)
+  dte: number; // actual days to the chosen expiration
+  strike: number;
+  delta: number;
+  mark: number; // premium per share to sell the call
+  premPct: number; // mark ÷ spot, %
+  annPct: number | null; // premPct annualized (×365/dte)
+  oi: number;
 }
 
 export interface CryptoHolding {
