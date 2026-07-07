@@ -189,7 +189,7 @@ function BoardRow({ row }: { row: AmBoardRow }) {
                 <span className="text-right text-[9px] uppercase text-muted/70">To Strk</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">Ann%</span>
                 <span className="text-right text-[9px] uppercase text-muted/70">OI</span>
-                {row.ladder.map((L) => (
+                {[...row.ladder].sort((a, b) => a.delta - b.delta).map((L) => (
                   <Fragment key={L.dTarget}>
                     <span className="font-medium text-text">{Math.round(Math.abs(L.delta) * 100)}Δ</span>
                     <span className="tabular text-right text-text">${L.strike}</span>
@@ -197,7 +197,7 @@ function BoardRow({ row }: { row: AmBoardRow }) {
                       {L.bbSigma != null ? `${L.bbSigma > 0 ? "+" : ""}${L.bbSigma.toFixed(1)}` : "—"}
                     </span>
                     <span className="tabular text-right text-text">{L.premPct.toFixed(2)}</span>
-                    <span className="tabular text-right text-muted">{row.last ? `${((L.strike - row.last) / row.last * 100).toFixed(1)}%` : "—"}</span>
+                    <span className="tabular text-right text-muted">{row.last ? `${((row.last - L.strike) / row.last * 100).toFixed(1)}%` : "—"}</span>
                     <span className={`tabular text-right ${annClass(L.annPct)}`}>{L.annPct != null ? L.annPct.toFixed(1) : "—"}</span>
                     <span className="tabular text-right text-muted">{L.oi.toLocaleString()}</span>
                   </Fragment>
