@@ -30,6 +30,16 @@ export interface Equity {
   price: number; // latest close per share
   dayChange?: number | null; // per-share $ move today (vs prior close), for Top Movers
   coveredCalls?: CoveredCallQuote[]; // ~30Δ call premiums at 14/21/30 DTE (holdings ≥100 sh)
+  bbSigma?: number | null; // current price's σ from its 20-day mean (−2 = lower band)
+  gamma?: GammaWalls | null; // naive dealer-gamma walls from option OI (holdings ≥100 sh)
+}
+
+// Naive dealer-gamma walls from option open interest — same shape the Brief uses.
+export interface GammaWalls {
+  flip: number | null; // zero-gamma flip strike
+  callWall: number | null; // highest call-OI strike (resistance)
+  putWall: number | null; // highest put-OI strike (support)
+  net: "pos" | "neg"; // net dealer gamma sign
 }
 
 // One ~30-delta covered-call quote at a target tenor, written by the bridge for held
