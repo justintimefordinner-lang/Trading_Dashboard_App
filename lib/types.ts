@@ -29,7 +29,7 @@ export interface Equity {
   avgCost: number; // average cost per share
   price: number; // latest close per share
   dayChange?: number | null; // per-share $ move today (vs prior close), for Top Movers
-  coveredCalls?: CoveredCallQuote[]; // ~30Δ call premiums at 14/21/30 DTE (holdings ≥100 sh)
+  coveredCalls?: CoveredCallQuote[]; // ~30Δ call premiums at 1–4 week tenors (holdings ≥100 sh)
   bbSigma?: number | null; // current price's σ from its 20-day mean (−2 = lower band)
   gamma?: GammaWalls | null; // naive dealer-gamma walls from option OI (holdings ≥100 sh)
 }

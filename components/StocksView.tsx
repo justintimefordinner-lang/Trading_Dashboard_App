@@ -228,7 +228,7 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                                 ))}
                               </div>
                               <div className="mt-1 text-[9px] leading-snug text-muted/60">
-                                Premium/share to sell one ~30Δ call near 14/21/30 days · Ann% = premium annualized
+                                Premium/share to sell one ~30Δ call near 1/2/3/4 weeks · Ann% = premium annualized
                               </div>
                             </div>
                           )}
