@@ -66,8 +66,6 @@ export default async function HomePage() {
   // — orange above 20%, red at 28%+, keeping under a 30% self-imposed ceiling.
   const totalExposure = summary.equityValue + optionsCapital;
   const marginUsed = Math.max(0, totalExposure - summary.totalValue);
-  const marginPct = summary.totalValue > 0 ? marginUsed / summary.totalValue : 0;
-  const marginColor = marginPct >= 0.28 ? "text-rose-400" : marginPct >= 0.2 ? "text-orange-400" : "text-muted";
   const freeCash = Math.max(
     0,
     summary.totalValue - summary.equityValue - leapCallsValue - hedgeValue - cspCollateralValue - spreadRisk - summary.cryptoValue,
@@ -206,11 +204,10 @@ export default async function HomePage() {
           value={<Amt>{fmtMoney(summary.optionsBuyingPower ?? summary.buyingPower)}</Amt>}
           sub={
             <>
-              <Amt>{fmtMoney(summary.cash)}</Amt> cash · <Amt>{`$${Math.round(marginUsed / 1000)}K`}</Amt> margin{" "}
-              <span className={marginColor}>{Math.round(marginPct * 100)}%</span>
+              <Amt>{fmtMoney(summary.cash)}</Amt> cash · <Amt>{`$${Math.round(marginUsed / 1000)}K`}</Amt> margin used
             </>
           }
-          pct={share(summary.cash)}
+          pct={share(summary.optionsBuyingPower ?? summary.buyingPower)}
         />
         <Stat
           label="Total theta / day"
