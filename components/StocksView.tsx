@@ -55,6 +55,7 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
   const [sortKey, setSortKey] = useState<SortKey>("value");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const router = useRouter();
+  const [pendingCC, setPendingCC] = useState<string | null>(null); // symbol awaiting "View CC?" confirm
 
   const toggle = (sym: string) =>
     setOpen((prev) => {
@@ -110,10 +111,10 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
     return sortDir === "asc" ? d : -d;
   });
 
-  const th = (k: SortKey, label: string, align: "start" | "end" = "end") => (
+  const th = (k: SortKey, label: string, align: "start" | "center" | "end" = "center") => (
     <button
       onClick={() => toggleSort(k)}
-      className={`flex items-center gap-0.5 active:opacity-70 ${align === "end" ? "justify-end" : ""} ${sortKey === k ? "text-text" : ""}`}
+      className={`flex items-center gap-0.5 active:opacity-70 ${align === "end" ? "justify-end" : align === "center" ? "justify-center" : ""} ${sortKey === k ? "text-text" : ""}`}
     >
       {label}
       <Caret on={sortKey === k} dir={sortDir} />
@@ -191,15 +192,15 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                           <span className="text-[9px] text-muted">{isOpen ? "▾" : "▸"}</span>
                           {e.symbol}
                         </span>
-                        <span className="tabular text-right text-muted">{e.qty.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
-                        <span className="tabular text-right">
+                        <span className="tabular text-center text-muted">{e.qty.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+                        <span className="tabular text-center">
                           {ccN > 0 ? (
                             <span
                               role="link"
                               title={`View the ${e.symbol} covered call${ccN > 1 ? "s" : ""}${ccFully ? "" : ` · ${ccN * 100} of ${e.qty} sh covered`}`}
                               onClick={(ev) => {
                                 ev.stopPropagation();
-                                router.push(`/options/covered?symbol=${encodeURIComponent(e.symbol)}`);
+                                setPendingCC(e.symbol);
                               }}
                               className={`cursor-pointer underline decoration-dotted underline-offset-2 ${ccFully ? "text-emerald-300" : "text-amber-300"}`}
                             >
@@ -209,16 +210,16 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                             <span className="text-muted/50">No</span>
                           )}
                         </span>
-                        <span className="tabular text-right">
+                        <span className="tabular text-center">
                           <Amt>{`$${e.avgCost.toFixed(2)}`}</Amt>
                         </span>
-                        <span className="tabular text-right">
+                        <span className="tabular text-center">
                           <Amt>{compactMoney(val)}</Amt>
                         </span>
-                        <span className={`tabular text-right ${pnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                        <span className={`tabular text-center ${pnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
                           <Amt>{`${pnl >= 0 ? "+" : "−"}${compactMoney(Math.abs(pnl))}`}</Amt>
                         </span>
-                        <span className={`tabular text-right ${pnlPct >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                        <span className={`tabular text-center ${pnlPct >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
                           {pnlPct >= 0 ? "+" : ""}
                           {(pnlPct * 100).toFixed(0)}%
                         </span>
@@ -308,6 +309,44 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
         </>
       ) : (
         <ClosedStocks source={closed} initialMode={closedMode} initialMonths={closedMonths} />
+      )}
+
+      {pendingCC && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="View covered call"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-8"
+          onClick={() => setPendingCC(null)}
+        >
+          <div
+            className="w-full max-w-[240px] rounded-2xl border border-border bg-surface p-5 text-center shadow-xl"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <p className="text-sm font-semibold text-text">View {pendingCC} CC?</p>
+            <p className="mt-1 text-[11px] text-muted">Opens the covered-call page for {pendingCC}.</p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingCC(null)}
+                className="flex-1 rounded-lg bg-surface-2 py-2 text-sm font-medium text-muted active:opacity-70"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const s = pendingCC;
+                  setPendingCC(null);
+                  router.push(`/options/covered?symbol=${encodeURIComponent(s)}`);
+                }}
+                className="flex-1 rounded-lg bg-emerald-500/20 py-2 text-sm font-semibold text-emerald-200 active:opacity-70"
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
