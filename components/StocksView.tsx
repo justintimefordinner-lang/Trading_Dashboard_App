@@ -5,20 +5,21 @@
 // a header to sort, tap a row to expand into last price, cost basis, today's move,
 // BB positioning, gamma walls and the ~30Δ covered-call premiums. Closed shows
 // realized round-trips with the shared time filter.
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { Card, SectionTitle, Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
 import { DataRefresh } from "@/components/DataRefresh";
 import { compactMoney } from "@/components/OptionRow";
 import { ClosedStocks } from "@/components/ClosedStocks";
 import { equityCost, equityPnl, equityPnlPct, equityValue, fmtMoney } from "@/lib/calc";
-import type { ClosedStock, Equity } from "@/lib/types";
+import type { ClosedStock, Equity, OptionPosition } from "@/lib/types";
 
 type Status = "open" | "closed";
-type SortKey = "sym" | "qty" | "avg" | "value" | "pnl" | "pnlPct";
+type SortKey = "sym" | "qty" | "cc" | "avg" | "value" | "pnl" | "pnlPct";
 
 // Shared column template so the header and every row line up.
-const COLS = "grid-cols-[1.2fr_0.6fr_0.85fr_0.9fr_0.9fr_0.6fr]";
+const COLS = "grid-cols-[1.1fr_0.5fr_0.5fr_0.82fr_0.85fr_0.85fr_0.55fr]";
 
 function Detail({ k, v }: { k: string; v: ReactNode }) {
   return (
@@ -37,15 +38,23 @@ function sigmaTone(s: number): string {
   return "text-text";
 }
 
+// yyyy-mm-dd → "Aug 21" (built from parts to avoid a UTC-parse day shift).
+function fmtExp(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function Caret({ on, dir }: { on: boolean; dir: "asc" | "desc" }) {
   return <span className={`text-[7px] ${on ? "text-text" : "text-transparent"}`}>{dir === "asc" ? "▲" : "▼"}</span>;
 }
 
-export function StocksView({ equities, closed, initialStatus = "open", closedMode, closedMonths, laddersNextAt }: { equities: Equity[]; closed: ClosedStock[]; initialStatus?: Status; closedMode?: "all" | "ytd" | "months" | "today"; closedMonths?: number; laddersNextAt?: string }) {
+export function StocksView({ equities, closed, initialStatus = "open", closedMode, closedMonths, laddersNextAt, coveredCalls = [] }: { equities: Equity[]; closed: ClosedStock[]; initialStatus?: Status; closedMode?: "all" | "ytd" | "months" | "today"; closedMonths?: number; laddersNextAt?: string; coveredCalls?: OptionPosition[] }) {
   const [status, setStatus] = useState<Status>(initialStatus);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("value");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const router = useRouter();
 
   const toggle = (sym: string) =>
     setOpen((prev) => {
@@ -67,9 +76,24 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
   const totalPnl = equities.reduce((s, e) => s + equityPnl(e), 0);
   const totalPct = totalCost > 0 ? totalPnl / totalCost : 0;
 
+  // Open covered calls written against these shares, grouped by underlying — both the
+  // CC column and the expanded "Covered" line read from this.
+  const ccBySym = useMemo(() => {
+    const m = new Map<string, { contracts: number; positions: OptionPosition[] }>();
+    for (const o of coveredCalls) {
+      const k = o.symbol.toUpperCase();
+      const cur = m.get(k) ?? { contracts: 0, positions: [] as OptionPosition[] };
+      cur.contracts += o.qty;
+      cur.positions.push(o);
+      m.set(k, cur);
+    }
+    return m;
+  }, [coveredCalls]);
+
   const sortNum = (e: Equity): number => {
     switch (sortKey) {
       case "qty": return e.qty;
+      case "cc": return ccBySym.get(e.symbol.toUpperCase())?.contracts ?? 0;
       case "avg": return e.avgCost;
       case "value": return equityValue(e);
       case "pnl": return equityPnl(e);
@@ -140,6 +164,7 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
               <div className={`grid ${COLS} gap-1.5 border-b border-border px-2 pb-1.5 pt-1 text-[10px] uppercase tracking-wide text-muted`}>
                 {th("sym", "Ticker", "start")}
                 {th("qty", "Qty")}
+                {th("cc", "CC")}
                 {th("avg", "Avg")}
                 {th("value", "Value")}
                 {th("pnl", "P/L$")}
@@ -150,6 +175,9 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                   const val = equityValue(e);
                   const pnl = equityPnl(e);
                   const pnlPct = equityPnlPct(e);
+                  const ccInfo = ccBySym.get(e.symbol.toUpperCase());
+                  const ccN = ccInfo?.contracts ?? 0;
+                  const ccFully = ccN > 0 && ccN * 100 >= e.qty;
                   const isOpen = open.has(e.symbol);
                   return (
                     <Fragment key={e.symbol}>
@@ -164,6 +192,23 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                           {e.symbol}
                         </span>
                         <span className="tabular text-right text-muted">{e.qty.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+                        <span className="tabular text-right">
+                          {ccN > 0 ? (
+                            <span
+                              role="link"
+                              title={`View the ${e.symbol} covered call${ccN > 1 ? "s" : ""}${ccFully ? "" : ` · ${ccN * 100} of ${e.qty} sh covered`}`}
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                router.push(`/options/covered?symbol=${encodeURIComponent(e.symbol)}`);
+                              }}
+                              className={`cursor-pointer underline decoration-dotted underline-offset-2 ${ccFully ? "text-emerald-300" : "text-amber-300"}`}
+                            >
+                              {ccN}
+                            </span>
+                          ) : (
+                            <span className="text-muted/50">No</span>
+                          )}
+                        </span>
                         <span className="tabular text-right">
                           <Amt>{`$${e.avgCost.toFixed(2)}`}</Amt>
                         </span>
@@ -202,10 +247,26 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                               {e.gamma.putWall ?? "—"}
                             </div>
                           )}
+                          {ccInfo && ccInfo.contracts > 0 && (
+                            <div className="mt-2.5 text-[11px] text-muted">
+                              <span className="font-semibold text-text">Covered</span>{" "}
+                              <span className={ccFully ? "text-emerald-300" : "text-amber-300"}>
+                                {ccInfo.contracts * 100}/{e.qty} sh
+                              </span>
+                              {" · "}
+                              {ccInfo.contracts} {ccInfo.contracts === 1 ? "call" : "calls"}
+                              {" · "}
+                              {ccInfo.positions
+                                .slice()
+                                .sort((a, b) => a.expiration.localeCompare(b.expiration))
+                                .map((p) => `$${p.strike} ${fmtExp(p.expiration)}`)
+                                .join(", ")}
+                            </div>
+                          )}
                           {e.coveredCalls && e.coveredCalls.length > 0 && (
                             <div className="mt-3">
                               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted/80">
-                                Covered call · ~30Δ
+                                Covered-call ideas · ~30Δ
                               </div>
                               <div className="grid grid-cols-[1.8rem_1fr_0.9fr_1fr_1fr_1fr] gap-x-2 gap-y-1 text-[11px]">
                                 <span className="text-[9px] uppercase text-muted/70">Exp</span>
