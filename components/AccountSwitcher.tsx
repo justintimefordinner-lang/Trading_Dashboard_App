@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import type { Account } from "@/lib/types";
 import { ACCOUNT_COOKIE, accountLabel } from "@/lib/account-shared";
 
+// Cross-app jump: this dashboard and its sibling run on adjacent ports on the
+// same host (Schwab :3000, Wheel Toolkit :3001). Keep whatever host you're on
+// (LAN IP, Tailscale, hostname) and just swap the port. Self-configuring from
+// the current port, so this file is identical in both apps.
+const OTHER_APP: Record<string, { port: string; label: string }> = {
+  "3000": { port: "3001", label: "Robinhood" },
+  "3001": { port: "3000", label: "Schwab" },
+};
+
 export function AccountSwitcher({
   accounts,
   selectedId,
@@ -14,6 +23,7 @@ export function AccountSwitcher({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [other, setOther] = useState<{ label: string; href: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -22,6 +32,12 @@ export function AccountSwitcher({
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  useEffect(() => {
+    const { hostname, port, protocol } = window.location;
+    const target = OTHER_APP[port];
+    if (target) setOther({ label: target.label, href: `${protocol}//${hostname}:${target.port}` });
   }, []);
 
   const current = accounts.find((a) => a.id === selectedId) ?? accounts[0];
@@ -103,6 +119,31 @@ export function AccountSwitcher({
               </button>
             );
           })}
+
+          {other && (
+            <a
+              href={other.href}
+              className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-sm font-medium text-sky-300 active:bg-surface-2"
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0"
+              >
+                <path d="M7 4 3 8l4 4" />
+                <path d="M3 8h13" />
+                <path d="m17 20 4-4-4-4" />
+                <path d="M21 16H8" />
+              </svg>
+              Switch to {other.label}
+            </a>
+          )}
         </div>
       )}
     </div>
