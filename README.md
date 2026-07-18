@@ -81,3 +81,6 @@ boot, with the bridge running alongside it writing fresh data on an interval.
   incomplete; verify anything before acting on it.
 - No secrets or credentials live in this repo — the app only ever *reads* local JSON. All
   brokerage access is isolated in the separate bridge project.
+- **Commit-time secret guard:** a dependency-free `.githooks/pre-commit` (plus a gitleaks
+  `.pre-commit-config.yaml`) blocks accidental commits of credential files or secret-looking
+  values. After cloning, enable it with `git config core.hooksPath .githooks`.
