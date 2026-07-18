@@ -5,6 +5,7 @@
 // later without turning into one long scroll of unrelated controls.
 import { useState, type ReactNode } from "react";
 import { setIvSkew } from "@/lib/simConfig";
+import { SchwabConnect } from "@/components/SchwabConnect";
 
 function MenuItem({
   title,
@@ -197,7 +198,10 @@ export function SettingsForm({
 }) {
   return (
     <div className="space-y-3">
-      <MenuItem title="Refresh intervals" subtitle="How often each data source updates" defaultOpen>
+      <MenuItem title="Schwab connection" subtitle="Set up or reconnect your account" defaultOpen>
+        <SchwabConnect />
+      </MenuItem>
+      <MenuItem title="Refresh intervals" subtitle="How often each data source updates">
         <IntervalsSection initialIntervals={initialIntervals} />
       </MenuItem>
       <MenuItem title="Simulate skew" subtitle="After-hours what-if IV assumption">

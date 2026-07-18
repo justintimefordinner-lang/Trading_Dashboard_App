@@ -58,6 +58,11 @@ To feed the dashboard live data, run the companion bridge, which writes those JS
 > — a small read-only Python bridge that pulls from a Charles Schwab account and writes the
 > `data/*.json` this app reads. Point its `APP_DATA_DIR` at this project's `data/` folder.
 
+Connect your Schwab account right from the app: open **Settings → Schwab connection** to enter
+your App Key/Secret (first run) and do the weekly re-login — no CLI needed. The app is write-only
+toward the bridge: it deposits credentials and the pasted login URL and never reads the bridge's
+secrets back.
+
 ## Deployment (optional)
 
 It runs anywhere Node runs, including a Raspberry Pi. A simple pattern is to run
