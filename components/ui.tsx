@@ -23,7 +23,7 @@ export function PageHeader({
   subtitle,
   right,
 }: {
-  title: string;
+  title: ReactNode;
   subtitle?: ReactNode;
   right?: ReactNode;
 }) {
