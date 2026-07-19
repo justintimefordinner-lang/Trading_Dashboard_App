@@ -10,7 +10,7 @@ import { getClosedStocks } from "@/lib/stocks-closed";
 import { optionPnl, equityPnl, daysBetween } from "@/lib/calc";
 import { PnlView, type BucketInput } from "@/components/PnlView";
 import { BuildHistory } from "@/components/BuildHistory";
-import { StockCostBasis } from "@/components/StockCostBasis";
+import { CostBasisAlert } from "@/components/CostBasisAlert";
 import { readUnresolvedStocks } from "@/lib/bridge-files";
 import type { OptionKind } from "@/lib/types";
 
@@ -82,7 +82,12 @@ export default async function PnlPage() {
         <PageHeader
           title="Profit & Loss"
           subtitle={`${account.nickname ?? account.mask} · realized and open by strategy`}
-          right={<BuildHistory hasHistory={hasHistory} />}
+          right={
+            <div className="flex items-center gap-2">
+              <CostBasisAlert unresolved={unresolved} />
+              <BuildHistory hasHistory={hasHistory} />
+            </div>
+          }
         />
         {!hasHistory && (
           <p className="mt-3 rounded-xl border border-border bg-surface px-4 py-3 text-center text-xs text-muted">
@@ -90,7 +95,6 @@ export default async function PnlPage() {
             pull your realized trades from Schwab.
           </p>
         )}
-        <StockCostBasis unresolved={unresolved} />
         <PnlView realized={realized} open={open} />
       </ShowAmounts>
     </main>
