@@ -166,7 +166,7 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                 {th("sym", "Ticker", "start")}
                 {th("qty", "Qty")}
                 {th("cc", "CC")}
-                {th("avg", "Avg")}
+                {th("avg", "Avg/Last")}
                 {th("value", "Value")}
                 {th("pnl", "P/L$")}
                 {th("pnlPct", "P/L%")}
@@ -210,8 +210,11 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                             <span className="text-muted/50">No</span>
                           )}
                         </span>
-                        <span className="tabular text-center">
+                        <span className="tabular flex flex-col items-center gap-0.5 leading-none">
                           <Amt>{`$${e.avgCost.toFixed(2)}`}</Amt>
+                          <span className="text-[9px] font-normal text-muted">
+                            <Amt>{`$${e.price.toFixed(2)}`}</Amt>
+                          </span>
                         </span>
                         <span className="tabular text-center">
                           <Amt>{compactMoney(val)}</Amt>
@@ -279,7 +282,12 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                                 {e.coveredCalls.map((cc) => (
                                   <Fragment key={cc.targetDte}>
                                     <span className="font-medium text-text">{cc.dte}d</span>
-                                    <span className="tabular text-right text-text">${cc.strike}</span>
+                                    <span
+                                      className={`tabular text-right ${cc.strike > e.avgCost ? "font-semibold text-emerald-300" : "text-text"}`}
+                                      title={cc.strike > e.avgCost ? "Above your average cost — assignment locks in a gain" : undefined}
+                                    >
+                                      ${cc.strike}
+                                    </span>
                                     <span className={`tabular text-right ${cc.bbSigma != null ? sigmaTone(cc.bbSigma) : "text-muted"}`}>
                                       {cc.bbSigma != null ? `${cc.bbSigma > 0 ? "+" : ""}${cc.bbSigma.toFixed(1)}` : "—"}
                                     </span>
