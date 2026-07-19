@@ -133,3 +133,43 @@ export function readHistoryStatus(): HistoryStatus {
     return fallback;
   }
 }
+
+// ── Manual cost basis for stock sales whose purchase predates the data window ──
+// These two files live in the app's OWN data/ folder (the shared diode): the bridge
+// writes stocks-unresolved.json, the app writes manual_cost_basis.json (not a secret,
+// so a read-merge is fine), and the bridge reads it back on its next rebuild.
+const UNRESOLVED_PATH = path.join(process.cwd(), "data", "stocks-unresolved.json");
+const MANUAL_BASIS_PATH = path.join(process.cwd(), "data", "manual_cost_basis.json");
+
+export interface UnresolvedStock {
+  id: string;
+  symbol: string;
+  side: "long" | "short";
+  shares: number;
+  soldAt: number;
+  closeDate: string;
+}
+
+export function readUnresolvedStocks(): UnresolvedStock[] {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(UNRESOLVED_PATH, "utf8")) as { unresolved?: UnresolvedStock[] };
+    return Array.isArray(parsed.unresolved) ? parsed.unresolved : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Merge one user-entered cost basis into manual_cost_basis.json. Read-merge is
+ * fine here — it's the user's own input, not a bridge secret. */
+export function saveManualCostBasis(id: string, costPerShare: number): void {
+  let cur: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(MANUAL_BASIS_PATH, "utf8"));
+    if (parsed && typeof parsed === "object") cur = parsed as Record<string, unknown>;
+  } catch {
+    cur = {};
+  }
+  cur[id] = { costPerShare };
+  fs.mkdirSync(path.dirname(MANUAL_BASIS_PATH), { recursive: true });
+  fs.writeFileSync(MANUAL_BASIS_PATH, JSON.stringify(cur, null, 2));
+}

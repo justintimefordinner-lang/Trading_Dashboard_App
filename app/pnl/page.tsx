@@ -10,6 +10,8 @@ import { getClosedStocks } from "@/lib/stocks-closed";
 import { optionPnl, equityPnl, daysBetween } from "@/lib/calc";
 import { PnlView, type BucketInput } from "@/components/PnlView";
 import { BuildHistory } from "@/components/BuildHistory";
+import { StockCostBasis } from "@/components/StockCostBasis";
+import { readUnresolvedStocks } from "@/lib/bridge-files";
 import type { OptionKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +73,8 @@ export default async function PnlPage() {
 
   // New users have no closed round-trips yet — offer a one-time Schwab backfill.
   const hasHistory = realized.some((b) => b.items.length > 0);
+  // Stock sales the bridge couldn't auto-cost (bought before our data history).
+  const unresolved = readUnresolvedStocks();
 
   return (
     <main className="px-4">
@@ -86,6 +90,7 @@ export default async function PnlPage() {
             pull your realized trades from Schwab.
           </p>
         )}
+        <StockCostBasis unresolved={unresolved} />
         <PnlView realized={realized} open={open} />
       </ShowAmounts>
     </main>
