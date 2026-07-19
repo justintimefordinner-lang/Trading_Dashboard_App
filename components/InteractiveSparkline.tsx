@@ -5,10 +5,15 @@
 // the series and reports the touched index via onScrub, so the parent can show the
 // "was" value and %-change at that point in the past. Releasing reports null.
 //
-// The SVG stretches horizontally (preserveAspectRatio="none"), so the crosshair,
-// dot and any markers are HTML overlays positioned by percentage — that keeps the
-// dot round and the line crisp regardless of width. The path stroke uses
-// non-scaling-stroke so it doesn't fatten on wide screens.
+// Drag tracking is done with WINDOW listeners attached on press-down (not element
+// handlers): once you're dragging, the move/up events fire on window regardless of
+// where the finger goes, so leaving the chart bounds — or moving fast — never drops
+// the gesture. touch-action:none + preventDefault stop the page from scrolling
+// while you scrub.
+//
+// The SVG stretches horizontally (preserveAspectRatio="none"), so the crosshair and
+// dot are HTML overlays positioned by percentage (round dot, crisp line at any
+// width); the path stroke uses non-scaling-stroke so it doesn't fatten.
 import { useRef, useState } from "react";
 import type { ValuePoint } from "@/lib/types";
 
@@ -26,7 +31,6 @@ export function InteractiveSparkline({
   onScrub?: (idx: number | null) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const down = useRef(false);
   const [active, setActive] = useState<number | null>(null);
 
   const pad = 6;
@@ -43,57 +47,54 @@ export function InteractiveSparkline({
   const area = `${line} L${xi(n - 1).toFixed(1)},${height - pad} L${xi(0).toFixed(1)},${height - pad} Z`;
   const color = positive ? "#34d399" : "#fb7185";
   const gid = `ispark-${positive ? "p" : "n"}`;
+  const interactive = n >= 2;
 
   const idxFrom = (clientX: number): number | null => {
     const el = wrapRef.current;
-    if (!el || n < 2) return null;
+    if (!el || !interactive) return null;
     const r = el.getBoundingClientRect();
     if (r.width === 0) return null;
     const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
     return Math.round(frac * (n - 1));
   };
 
-  const set = (clientX: number) => {
-    const i = idxFrom(clientX);
-    if (i === null || i === active) return;
-    setActive(i);
-    onScrub?.(i);
-  };
-  const end = () => {
-    down.current = false;
-    if (active === null) return;
-    setActive(null);
-    onScrub?.(null);
+  const beginScrub = (e: React.PointerEvent) => {
+    if (!interactive) return;
+    e.preventDefault();
+
+    const apply = (clientX: number) => {
+      const i = idxFrom(clientX);
+      if (i === null) return;
+      setActive(i);
+      onScrub?.(i);
+    };
+    apply(e.clientX); // press registers immediately
+
+    const move = (ev: PointerEvent) => {
+      ev.preventDefault(); // hold off page scroll while dragging
+      apply(ev.clientX);
+    };
+    const end = () => {
+      setActive(null);
+      onScrub?.(null);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
   };
 
   const fracPct = active !== null ? (active / (n - 1)) * 100 : 0;
   const topPct = active !== null ? (yv(data[active].value) / height) * 100 : 0;
-  const interactive = n >= 2;
 
   return (
     <div
       ref={wrapRef}
       className="relative select-none"
       style={interactive ? { touchAction: "none" } : undefined}
-      onPointerDown={
-        interactive
-          ? (e) => {
-              down.current = true;
-              e.currentTarget.setPointerCapture(e.pointerId);
-              set(e.clientX);
-            }
-          : undefined
-      }
-      onPointerMove={
-        interactive
-          ? (e) => {
-              if (down.current) set(e.clientX);
-            }
-          : undefined
-      }
-      onPointerUp={interactive ? end : undefined}
-      onPointerCancel={interactive ? end : undefined}
-      onPointerLeave={interactive ? end : undefined}
+      onPointerDown={interactive ? beginScrub : undefined}
     >
       <svg
         viewBox={`0 0 ${width} ${height}`}
