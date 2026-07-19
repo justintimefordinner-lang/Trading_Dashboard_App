@@ -188,7 +188,7 @@ export interface ClosedCSP {
   creditReceived: number; // $ credit at open
   costToClose: number; // $ debit to buy-to-close (0 if expired)
   realizedPnl: number; // $
-  outcome: "closed_profit" | "closed_loss" | "expired";
+  outcome: "closed_profit" | "closed_loss" | "expired" | "assigned";
   daysHeld: number;
   collateral: number;
   returnOnCollateral: number; // decimal
