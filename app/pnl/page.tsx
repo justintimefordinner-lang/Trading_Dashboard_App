@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/ui";
-import { ShowAmounts, HideButton } from "@/components/privacy";
+import { ShowAmounts } from "@/components/privacy";
 import { getSnapshot } from "@/lib/snapshot";
 import { getSelectedAccount } from "@/lib/account";
 import { getClosedCsps } from "@/lib/csp-closed";
@@ -78,9 +78,14 @@ export default async function PnlPage() {
         <PageHeader
           title="Profit & Loss"
           subtitle={`${account.nickname ?? account.mask} · realized and open by strategy`}
-          right={<HideButton />}
+          right={<BuildHistory hasHistory={hasHistory} />}
         />
-        <BuildHistory hasHistory={hasHistory} />
+        {!hasHistory && (
+          <p className="mt-3 rounded-xl border border-border bg-surface px-4 py-3 text-center text-xs text-muted">
+            No closed trades yet — tap <span className="font-medium text-text">Build history</span> above to
+            pull your realized trades from Schwab.
+          </p>
+        )}
         <PnlView realized={realized} open={open} />
       </ShowAmounts>
     </main>
