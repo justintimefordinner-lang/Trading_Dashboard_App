@@ -25,7 +25,9 @@ type Item =
 const chipFor = (outcome: string) =>
   outcome === "closed_loss"
     ? "bg-rose-500/15 text-rose-300 ring-rose-500/30"
-    : "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30";
+    : outcome === "assigned"
+      ? "bg-sky-500/15 text-sky-300 ring-sky-500/30"
+      : "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30";
 
 export function ClosedOptions({
   csps,
@@ -297,7 +299,7 @@ export function ClosedOptions({
                     </span>
                     <span className="flex justify-end">
                       <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${chipFor(d.outcome)}`}>
-                        {d.outcome === "expired" ? "expired" : d.outcome === "closed_loss" ? "loss" : "closed"}
+                        {d.outcome === "expired" ? "expired" : d.outcome === "assigned" ? "assigned" : d.outcome === "closed_loss" ? "loss" : "closed"}
                       </span>
                     </span>
                   </button>
@@ -378,9 +380,9 @@ function CspRows({ c }: { c: ClosedCSP }) {
       <Row k="Opened → closed" v={`${c.openedAt} → ${c.closedAt} (${c.daysHeld}d held)`} />
       <Row k="Contracts" v={`${c.contracts} (×100 = ${c.contracts * 100} sh)`} />
       <Row k="Credit received" v={<><Amt>{fmtMoney(c.creditReceived, { cents: true })}</Amt> <span className="text-muted">(${c.creditPerShare.toFixed(2)}/sh)</span></>} />
-      <Row k="Cost to close" v={c.outcome === "expired" ? "$0 (expired worthless)" : <Amt>{fmtMoney(c.costToClose, { cents: true })}</Amt>} />
+      <Row k="Cost to close" v={c.outcome === "expired" ? "$0 (expired worthless)" : c.outcome === "assigned" ? "$0 (assigned into shares)" : <Amt>{fmtMoney(c.costToClose, { cents: true })}</Amt>} />
       <Row k="Collateral" v={<Amt>{fmtMoney(c.collateral)}</Amt>} />
-      <Row k="Realized P/L" v={<span className={c.realizedPnl >= 0 ? "text-emerald-400" : "text-rose-400"}><Amt>{`${c.realizedPnl >= 0 ? "+" : "−"}${fmtMoney(Math.abs(c.realizedPnl), { cents: true })}`}</Amt></span>} />
+      <Row k="Realized P/L" v={c.outcome === "assigned" ? <span className="text-sky-300">$0 <span className="text-muted">— premium folded into share cost basis</span></span> : <span className={c.realizedPnl >= 0 ? "text-emerald-400" : "text-rose-400"}><Amt>{`${c.realizedPnl >= 0 ? "+" : "−"}${fmtMoney(Math.abs(c.realizedPnl), { cents: true })}`}</Amt></span>} />
       <Row k="Return on collateral" v={`${(c.returnOnCollateral * 100).toFixed(2)}% · ${fmtPct(c.annualized, 0)} annualized`} />
     </dl>
   );
