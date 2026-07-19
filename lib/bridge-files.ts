@@ -104,3 +104,32 @@ export function readAuthStatus(): SchwabAuthStatus {
     return fallback;
   }
 }
+
+// ── Trade-history backfill: write-only trigger + one-way status read ──
+const TASK_INBOX_DIR = path.join(BRIDGE_DIR, "task_inbox");
+const BACKFILL_MARKER = path.join(TASK_INBOX_DIR, "backfill_history");
+const HISTORY_STATUS_PATH = path.join(process.cwd(), "data", "history-status.json");
+
+/** Drop the "rebuild full trade history" marker for the bridge. Write-only. */
+export function requestHistoryBackfill(): void {
+  fs.mkdirSync(TASK_INBOX_DIR, { recursive: true });
+  fs.writeFileSync(BACKFILL_MARKER, "");
+}
+
+export interface HistoryStatus {
+  status: "idle" | "running" | "done" | "error";
+  counts: Record<string, number> | null;
+  error: string | null;
+  updatedAt: string | null;
+}
+
+/** Read the bridge-written backfill status from the app's OWN data/ folder. */
+export function readHistoryStatus(): HistoryStatus {
+  const fallback: HistoryStatus = { status: "idle", counts: null, error: null, updatedAt: null };
+  try {
+    const raw = fs.readFileSync(HISTORY_STATUS_PATH, "utf8");
+    return { ...fallback, ...(JSON.parse(raw) as Partial<HistoryStatus>) };
+  } catch {
+    return fallback;
+  }
+}

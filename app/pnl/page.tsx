@@ -9,6 +9,7 @@ import { getClosedSpreads } from "@/lib/spreads-closed";
 import { getClosedStocks } from "@/lib/stocks-closed";
 import { optionPnl, equityPnl, daysBetween } from "@/lib/calc";
 import { PnlView, type BucketInput } from "@/components/PnlView";
+import { BuildHistory } from "@/components/BuildHistory";
 import type { OptionKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,9 @@ export default async function PnlPage() {
     { key: "other", label: "Other", items: openByKey.other ?? [] },
   ];
 
+  // New users have no closed round-trips yet — offer a one-time Schwab backfill.
+  const hasHistory = realized.some((b) => b.items.length > 0);
+
   return (
     <main className="px-4">
       <ShowAmounts>
@@ -76,6 +80,7 @@ export default async function PnlPage() {
           subtitle={`${account.nickname ?? account.mask} · realized and open by strategy`}
           right={<HideButton />}
         />
+        <BuildHistory hasHistory={hasHistory} />
         <PnlView realized={realized} open={open} />
       </ShowAmounts>
     </main>
