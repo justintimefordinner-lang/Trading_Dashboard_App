@@ -25,6 +25,14 @@ const ACCENT: Record<string, string> = {
 
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}${fmtMoney(Math.abs(n))}`;
 
+// Compact dollars for tight sub-labels: $980, $14k, $1.2M.
+const fmtCompact = (n: number) => {
+  const a = Math.abs(n);
+  if (a >= 1_000_000) return `$${(n / 1_000_000).toFixed(a >= 10_000_000 ? 0 : 1)}M`;
+  if (a >= 1_000) return `$${(n / 1_000).toFixed(a >= 10_000 ? 0 : 1)}k`;
+  return `$${Math.round(n)}`;
+};
+
 // Where each strategy bucket links to (Open or Closed set by ?view=).
 const STRATEGY_ROUTE: Record<string, string> = {
   csp: "/options/csp",
@@ -50,6 +58,8 @@ interface BucketAgg {
   pnl: number;
   count: number;
   wins: number;
+  winDollars: number; // sum of positive trade P&L
+  lossDollars: number; // sum of |negative trade P&L| (positive magnitude)
 }
 
 export function PnlView({ realized, open }: { realized: BucketInput[]; open: BucketInput[] }) {
@@ -66,7 +76,9 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
         const items = isRealized ? b.items.filter((it) => (it.date ? inRange(it.date, range) : true)) : b.items;
         const pnl = items.reduce((s, it) => s + it.pnl, 0);
         const wins = items.filter((it) => it.pnl > 0).length;
-        return { key: b.key, label: b.label, pnl, count: items.length, wins };
+        const winDollars = items.reduce((s, it) => s + Math.max(0, it.pnl), 0);
+        const lossDollars = items.reduce((s, it) => s - Math.min(0, it.pnl), 0);
+        return { key: b.key, label: b.label, pnl, count: items.length, wins, winDollars, lossDollars };
       })
       .filter((b) => b.count > 0)
       .sort((a, b) => b.pnl - a.pnl);
@@ -98,10 +110,16 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
   const total = buckets.reduce((s, b) => s + b.pnl, 0);
   const totalCount = buckets.reduce((s, b) => s + b.count, 0);
   const totalWins = buckets.reduce((s, b) => s + b.wins, 0);
-  const grossProfit = buckets.reduce((s, b) => s + Math.max(0, b.pnl), 0);
-  const grossLoss = buckets.reduce((s, b) => s + Math.min(0, b.pnl), 0);
+  // Trade-level winning vs losing dollars (not bucket-netted), so the gross split
+  // and the dollarized win rate reflect actual winners/losers rather than netting
+  // to $0 within a profitable strategy.
+  const winDollars = buckets.reduce((s, b) => s + b.winDollars, 0);
+  const lossDollars = buckets.reduce((s, b) => s + b.lossDollars, 0); // positive magnitude
   const maxAbs = buckets.reduce((m, b) => Math.max(m, Math.abs(b.pnl)), 0);
   const winRate = totalCount > 0 ? Math.round((totalWins / totalCount) * 100) : 0;
+  // Dollarized win rate: share of gross traded dollars that were winners.
+  const dollarPool = winDollars + lossDollars;
+  const dollarWinRate = dollarPool > 0 ? Math.round((winDollars / dollarPool) * 100) : 0;
 
   // Same items, grouped by underlying ticker instead of by strategy. Each ticker keeps
   // its constituent trades so the row can expand into a per-trade breakout.
@@ -193,22 +211,26 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
       {/* Win rate */}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Stat
-          label={isRealized ? "Win rate" : "In profit"}
-          value={`${winRate}%`}
-          tone={totalCount === 0 ? undefined : winRate >= 50 ? "pos" : "neg"}
-          sub={`${totalWins}/${totalCount} ${isRealized ? "profitable" : "positions"}`}
+          label={isRealized ? "Win rate ($)" : "In profit ($)"}
+          value={`${dollarWinRate}%`}
+          tone={dollarPool === 0 ? undefined : dollarWinRate >= 50 ? "pos" : "neg"}
+          sub={
+            isRealized
+              ? `${fmtCompact(winDollars)} won · ${fmtCompact(lossDollars)} lost`
+              : `${fmtCompact(winDollars)} up · ${fmtCompact(lossDollars)} down`
+          }
         />
         <Stat
           label={isRealized ? "Win–loss" : "Up–down"}
           value={`${totalWins}–${Math.max(0, totalCount - totalWins)}`}
-          sub={isRealized ? "closed trades" : "open positions"}
+          sub={`${winRate}% ${isRealized ? "by trade count" : "in profit"}`}
         />
       </div>
 
       {/* Gross split */}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <Stat label="Gross profit" value={<Amt>{signed(grossProfit)}</Amt>} tone="pos" />
-        <Stat label="Gross loss" value={<Amt>{grossLoss < 0 ? signed(grossLoss) : fmtMoney(0)}</Amt>} tone="neg" />
+        <Stat label="Gross profit" value={<Amt>{signed(winDollars)}</Amt>} tone="pos" />
+        <Stat label="Gross loss" value={<Amt>{lossDollars > 0 ? signed(-lossDollars) : fmtMoney(0)}</Amt>} tone="neg" />
       </div>
 
       {/* Monthly P&L bars (realized) */}
