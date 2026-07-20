@@ -18,11 +18,16 @@ export interface BucketInput {
     strikeLabel?: string;
     openedAt?: string;
     daysHeld?: number;
-    side?: "short" | "long"; // short-premium (CSP/covered/credit) vs long (LEAP/stock/debit)
   }[];
 }
 
-type SideFilter = "both" | "short" | "long";
+// Capital-gains holding period. Short-term = held one year or less; anything longer
+// — or without a determinable holding period — is treated as long-term.
+type TermFilter = "both" | "short" | "long";
+const LONG_TERM_DAYS = 365;
+const isShortTerm = (daysHeld?: number) => daysHeld != null && daysHeld <= LONG_TERM_DAYS;
+const keepTerm = (term: TermFilter, daysHeld?: number) =>
+  term === "both" || (term === "short" ? isShortTerm(daysHeld) : !isShortTerm(daysHeld));
 
 const ACCENT: Record<string, string> = {
   csp: "bg-sky-400",
@@ -75,7 +80,7 @@ interface BucketAgg {
 export function PnlView({ realized, open }: { realized: BucketInput[]; open: BucketInput[] }) {
   const tf = useTimeFilter("months", 1); // default to the last 1 month
   const [mode, setMode] = useState<"realized" | "open">("realized");
-  const [side, setSide] = useState<SideFilter>("both");
+  const [term, setTerm] = useState<TermFilter>("both");
 
   const isRealized = mode === "realized";
   const source = isRealized ? realized : open;
@@ -84,7 +89,7 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
   const buckets = useMemo<BucketAgg[]>(() => {
     return source
       .map((b) => {
-        const items = (isRealized ? b.items.filter((it) => (it.date ? inRange(it.date, range) : true)) : b.items).filter((it) => side === "both" || it.side === side);
+        const items = (isRealized ? b.items.filter((it) => (it.date ? inRange(it.date, range) : true)) : b.items).filter((it) => keepTerm(term, it.daysHeld));
         const pnl = items.reduce((s, it) => s + it.pnl, 0);
         const wins = items.filter((it) => it.pnl > 0).length;
         const winDollars = items.reduce((s, it) => s + Math.max(0, it.pnl), 0);
@@ -93,17 +98,17 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
       })
       .filter((b) => b.count > 0)
       .sort((a, b) => b.pnl - a.pnl);
-  }, [source, isRealized, range, side]);
+  }, [source, isRealized, range, term]);
 
   // Flat, dated item list (realized only) for the time-series charts.
   const dated = useMemo(() => {
     if (!isRealized) return [] as { pnl: number; date: string }[];
     return realized
       .flatMap((b) => b.items)
-      .filter((it) => side === "both" || it.side === side)
+      .filter((it) => keepTerm(term, it.daysHeld))
       .filter((it): it is { pnl: number; date: string } => !!it.date && inRange(it.date, range))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [realized, isRealized, range, side]);
+  }, [realized, isRealized, range, term]);
 
   const cumulative = useMemo(() => {
     let run = 0;
@@ -130,7 +135,7 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
   const tickers = useMemo<{ sym: string; pnl: number; count: number; wins: number; trades: TickerTrade[] }[]>(() => {
     const m = new Map<string, { pnl: number; count: number; wins: number; trades: TickerTrade[] }>();
     for (const b of source) {
-      const items = (isRealized ? b.items.filter((it) => (it.date ? inRange(it.date, range) : true)) : b.items).filter((it) => side === "both" || it.side === side);
+      const items = (isRealized ? b.items.filter((it) => (it.date ? inRange(it.date, range) : true)) : b.items).filter((it) => keepTerm(term, it.daysHeld));
       for (const it of items) {
         const sym = (it.sym ?? "—").toUpperCase();
         const agg = m.get(sym) ?? { pnl: 0, count: 0, wins: 0, trades: [] };
@@ -147,7 +152,7 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
       t.trades.sort((a, c) => c.pnl - a.pnl); // largest profit first
     }
     return out.sort((a, b) => b.pnl - a.pnl);
-  }, [source, isRealized, range, side]);
+  }, [source, isRealized, range, term]);
 
   const tickerMaxAbs = tickers.reduce((m, t) => Math.max(m, Math.abs(t.pnl)), 0);
   const [showAllTickers, setShowAllTickers] = useState(false);
@@ -236,19 +241,24 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
         <Stat label="Gross loss" value={<Amt>{lossDollars > 0 ? signed(-lossDollars) : fmtMoney(0)}</Amt>} tone="neg" />
       </div>
 
-      {/* By strategy — the short/long lens re-scopes the whole realized/open view */}
+      {/* By strategy — the capital-gains term lens re-scopes the whole realized/open view */}
       <SectionTitle
         action={
           <div className="flex rounded-lg border border-border bg-surface-2 p-0.5 text-[11px] font-medium">
-            {(["both", "short", "long"] as const).map((s) => (
+            {([
+              { key: "both", label: "Both", title: "All realized gains" },
+              { key: "short", label: "Short", title: "Short-term gains — held one year or less" },
+              { key: "long", label: "Long", title: "Long-term gains — held more than one year" },
+            ] as const).map((t) => (
               <button
-                key={s}
-                onClick={() => setSide(s)}
-                className={`rounded-md px-2 py-0.5 capitalize transition-colors ${
-                  side === s ? "bg-surface text-text shadow-sm" : "text-muted"
+                key={t.key}
+                onClick={() => setTerm(t.key)}
+                title={t.title}
+                className={`rounded-md px-2 py-0.5 transition-colors ${
+                  term === t.key ? "bg-surface text-text shadow-sm" : "text-muted"
                 }`}
               >
-                {s}
+                {t.label}
               </button>
             ))}
           </div>

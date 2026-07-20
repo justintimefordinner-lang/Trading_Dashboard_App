@@ -42,21 +42,16 @@ export default async function PnlPage() {
     getClosedLeaps(),
     getClosedStocks(),
   ]);
-  // Short = premium collected (CSP, covered call, credit spread); Long = directional
-  // capital at risk (LEAP, long stock, debit spread). Lets the P&L page filter which.
   const realized: BucketInput[] = [
-    { key: "csp", label: "CSPs", items: cspF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld, side: "short" as const })) },
-    { key: "covered", label: "Covered calls", items: coveredF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld, side: "short" as const })) },
-    { key: "spread", label: "Spreads", items: spreadF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.shortStrike}/${r.longStrike}`, openedAt: r.openedAt, daysHeld: r.daysHeld, side: (r.isCredit ? "short" : "long") as "short" | "long" })) },
-    { key: "leap", label: "LEAPs", items: leapF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld, side: "long" as const })) },
-    { key: "stock", label: "Stocks", items: stockF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `${px(r.avgOpen)} → ${px(r.avgClose)}`, openedAt: r.openedAt, daysHeld: r.daysHeld, side: r.side })) },
+    { key: "csp", label: "CSPs", items: cspF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
+    { key: "covered", label: "Covered calls", items: coveredF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
+    { key: "spread", label: "Spreads", items: spreadF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.shortStrike}/${r.longStrike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
+    { key: "leap", label: "LEAPs", items: leapF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
+    { key: "stock", label: "Stocks", items: stockF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `${px(r.avgOpen)} → ${px(r.avgClose)}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
   ];
 
   // Open — current unrealized mark-to-market per bucket.
-  const OPEN_SIDE: Record<string, "short" | "long" | undefined> = {
-    csp: "short", covered: "short", spread: "short", leap: "long", stock: "long",
-  };
-  const openByKey: Record<string, { pnl: number; sym?: string; strikeLabel?: string; openedAt?: string; daysHeld?: number; side?: "short" | "long" }[]> = {};
+  const openByKey: Record<string, { pnl: number; sym?: string; strikeLabel?: string; openedAt?: string; daysHeld?: number }[]> = {};
   for (const o of data.options) {
     const key = KIND_KEY[o.kind] ?? "other";
     (openByKey[key] ??= []).push({
@@ -65,7 +60,6 @@ export default async function PnlPage() {
       strikeLabel: `$${o.strike}`,
       openedAt: o.openedAt,
       daysHeld: o.openedAt ? daysBetween(o.openedAt) : undefined,
-      side: OPEN_SIDE[key],
     });
   }
   const open: BucketInput[] = [
@@ -73,7 +67,7 @@ export default async function PnlPage() {
     { key: "covered", label: "Covered calls", items: openByKey.covered ?? [] },
     { key: "spread", label: "Spreads", items: openByKey.spread ?? [] },
     { key: "leap", label: "LEAPs", items: openByKey.leap ?? [] },
-    { key: "stock", label: "Stocks", items: data.equities.map((e) => ({ pnl: equityPnl(e), sym: e.symbol, strikeLabel: `${px(e.avgCost)} → ${px(e.price)}`, side: "long" as const })) },
+    { key: "stock", label: "Stocks", items: data.equities.map((e) => ({ pnl: equityPnl(e), sym: e.symbol, strikeLabel: `${px(e.avgCost)} → ${px(e.price)}` })) },
     { key: "other", label: "Other", items: openByKey.other ?? [] },
   ];
 
