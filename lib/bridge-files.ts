@@ -175,6 +175,8 @@ export interface UnresolvedStock {
   shares: number;
   soldAt: number;
   closeDate: string;
+  costPerShare?: number | null; // pre-filled when a basis was already entered (just needs a date)
+  acquiredDate?: string | null; // ISO date; when missing the sale can't be short/long-term classified
 }
 
 export function readUnresolvedStocks(): UnresolvedStock[] {
@@ -186,9 +188,11 @@ export function readUnresolvedStocks(): UnresolvedStock[] {
   }
 }
 
-/** Merge one user-entered cost basis into manual_cost_basis.json. Read-merge is
- * fine here — it's the user's own input, not a bridge secret. */
-export function saveManualCostBasis(id: string, costPerShare: number): void {
+/** Merge one user-entered cost basis (and optional acquired date) into
+ * manual_cost_basis.json. Read-merge is fine here — it's the user's own input, not
+ * a bridge secret. acquiredDate sets the holding period so the bridge can classify
+ * the sale as short- vs long-term. */
+export function saveManualCostBasis(id: string, costPerShare: number, acquiredDate?: string | null): void {
   let cur: Record<string, unknown> = {};
   try {
     const parsed = JSON.parse(fs.readFileSync(MANUAL_BASIS_PATH, "utf8"));
@@ -196,7 +200,8 @@ export function saveManualCostBasis(id: string, costPerShare: number): void {
   } catch {
     cur = {};
   }
-  cur[id] = { costPerShare };
+  const acq = (acquiredDate || "").trim();
+  cur[id] = acq ? { costPerShare, acquiredDate: acq } : { costPerShare };
   fs.mkdirSync(path.dirname(MANUAL_BASIS_PATH), { recursive: true });
   fs.writeFileSync(MANUAL_BASIS_PATH, JSON.stringify(cur, null, 2));
 }

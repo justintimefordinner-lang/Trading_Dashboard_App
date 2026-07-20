@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 interface Body {
   id?: string;
   costPerShare?: number;
+  acquiredDate?: string;
 }
 
 export async function POST(req: Request) {
@@ -26,8 +27,12 @@ export async function POST(req: Request) {
   if (typeof cps !== "number" || !Number.isFinite(cps) || cps < 0) {
     return Response.json({ ok: false, error: "Cost per share must be a number ≥ 0." }, { status: 400 });
   }
+  const acquired = (body.acquiredDate || "").trim();
+  if (acquired && !/^\d{4}-\d{2}-\d{2}$/.test(acquired)) {
+    return Response.json({ ok: false, error: "Acquired date must be YYYY-MM-DD." }, { status: 400 });
+  }
   try {
-    saveManualCostBasis(id, cps);
+    saveManualCostBasis(id, cps, acquired || null);
   } catch {
     return Response.json({ ok: false, error: "Could not save the cost basis." }, { status: 500 });
   }
