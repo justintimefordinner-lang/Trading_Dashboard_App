@@ -226,8 +226,30 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
           )}
         </div>
 
+        {/* Capital-gains term lens — re-scopes the whole realized/open view */}
+        <div className="mt-3 flex">
+          <div className="flex rounded-lg border border-border bg-surface-2 p-0.5 text-[11px] font-medium">
+            {([
+              { key: "both", label: "Both", title: "All realized gains" },
+              { key: "short", label: "Short", title: "Short-term gains — held one year or less" },
+              { key: "long", label: "Long", title: "Long-term gains — held more than one year" },
+            ] as const).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTerm(t.key)}
+                title={t.title}
+                className={`rounded-md px-2.5 py-0.5 transition-colors ${
+                  term === t.key ? "bg-surface text-text shadow-sm" : "text-muted"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {isRealized && cumulative.length >= 2 && (
-          <div className="mt-3">
+          <div className="mt-2">
             <CumulativeChart points={cumulative} onScrub={setCumScrub} />
           </div>
         )}
@@ -258,31 +280,8 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
         <Stat label="Gross loss" value={<Amt>{lossDollars > 0 ? signed(-lossDollars) : fmtMoney(0)}</Amt>} tone="neg" />
       </div>
 
-      {/* By strategy — the capital-gains term lens re-scopes the whole realized/open view */}
-      <SectionTitle
-        action={
-          <div className="flex rounded-lg border border-border bg-surface-2 p-0.5 text-[11px] font-medium">
-            {([
-              { key: "both", label: "Both", title: "All realized gains" },
-              { key: "short", label: "Short", title: "Short-term gains — held one year or less" },
-              { key: "long", label: "Long", title: "Long-term gains — held more than one year" },
-            ] as const).map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTerm(t.key)}
-                title={t.title}
-                className={`rounded-md px-2 py-0.5 transition-colors ${
-                  term === t.key ? "bg-surface text-text shadow-sm" : "text-muted"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        }
-      >
-        By strategy
-      </SectionTitle>
+      {/* By strategy */}
+      <SectionTitle>By strategy</SectionTitle>
       {buckets.length === 0 ? (
         <Card className="px-4 py-6 text-center text-[12px] text-muted">
           No {isRealized ? "closed trades in this range" : "open positions"} yet.
