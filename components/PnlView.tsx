@@ -11,8 +11,18 @@ import { inRange, rangeSubLabel } from "@/lib/date-range";
 export interface BucketInput {
   key: string;
   label: string;
-  items: { pnl: number; date?: string; sym?: string; strikeLabel?: string; openedAt?: string; daysHeld?: number }[];
+  items: {
+    pnl: number;
+    date?: string;
+    sym?: string;
+    strikeLabel?: string;
+    openedAt?: string;
+    daysHeld?: number;
+    side?: "short" | "long"; // short-premium (CSP/covered/credit) vs long (LEAP/stock/debit)
+  }[];
 }
+
+type SideFilter = "both" | "short" | "long";
 
 const ACCENT: Record<string, string> = {
   csp: "bg-sky-400",
@@ -65,6 +75,7 @@ interface BucketAgg {
 export function PnlView({ realized, open }: { realized: BucketInput[]; open: BucketInput[] }) {
   const tf = useTimeFilter("months", 1); // default to the last 1 month
   const [mode, setMode] = useState<"realized" | "open">("realized");
+  const [side, setSide] = useState<SideFilter>("both");
 
   const isRealized = mode === "realized";
   const source = isRealized ? realized : open;
@@ -73,7 +84,7 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
   const buckets = useMemo<BucketAgg[]>(() => {
     return source
       .map((b) => {
-        const items = isRealized ? b.items.filter((it) => (it.date ? inRange(it.date, range) : true)) : b.items;
+        const items = (isRealized ? b.items.filter((it) => (it.date ? inRange(it.date, range) : true)) : b.items).filter((it) => side === "both" || it.side === side);
         const pnl = items.reduce((s, it) => s + it.pnl, 0);
         const wins = items.filter((it) => it.pnl > 0).length;
         const winDollars = items.reduce((s, it) => s + Math.max(0, it.pnl), 0);
@@ -82,29 +93,21 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
       })
       .filter((b) => b.count > 0)
       .sort((a, b) => b.pnl - a.pnl);
-  }, [source, isRealized, range]);
+  }, [source, isRealized, range, side]);
 
   // Flat, dated item list (realized only) for the time-series charts.
   const dated = useMemo(() => {
     if (!isRealized) return [] as { pnl: number; date: string }[];
     return realized
       .flatMap((b) => b.items)
+      .filter((it) => side === "both" || it.side === side)
       .filter((it): it is { pnl: number; date: string } => !!it.date && inRange(it.date, range))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [realized, isRealized, range]);
+  }, [realized, isRealized, range, side]);
 
   const cumulative = useMemo(() => {
     let run = 0;
     return dated.map((it) => ({ date: it.date, cum: (run += it.pnl) }));
-  }, [dated]);
-
-  const monthly = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const it of dated) {
-      const key = it.date.slice(0, 7); // YYYY-MM
-      m.set(key, (m.get(key) ?? 0) + it.pnl);
-    }
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([key, pnl]) => ({ key, pnl }));
   }, [dated]);
 
   const total = buckets.reduce((s, b) => s + b.pnl, 0);
@@ -127,7 +130,7 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
   const tickers = useMemo<{ sym: string; pnl: number; count: number; wins: number; trades: TickerTrade[] }[]>(() => {
     const m = new Map<string, { pnl: number; count: number; wins: number; trades: TickerTrade[] }>();
     for (const b of source) {
-      const items = isRealized ? b.items.filter((it) => (it.date ? inRange(it.date, range) : true)) : b.items;
+      const items = (isRealized ? b.items.filter((it) => (it.date ? inRange(it.date, range) : true)) : b.items).filter((it) => side === "both" || it.side === side);
       for (const it of items) {
         const sym = (it.sym ?? "—").toUpperCase();
         const agg = m.get(sym) ?? { pnl: 0, count: 0, wins: 0, trades: [] };
@@ -144,7 +147,7 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
       t.trades.sort((a, c) => c.pnl - a.pnl); // largest profit first
     }
     return out.sort((a, b) => b.pnl - a.pnl);
-  }, [source, isRealized, range]);
+  }, [source, isRealized, range, side]);
 
   const tickerMaxAbs = tickers.reduce((m, t) => Math.max(m, Math.abs(t.pnl)), 0);
   const [showAllTickers, setShowAllTickers] = useState(false);
@@ -233,18 +236,26 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
         <Stat label="Gross loss" value={<Amt>{lossDollars > 0 ? signed(-lossDollars) : fmtMoney(0)}</Amt>} tone="neg" />
       </div>
 
-      {/* Monthly P&L bars (realized) */}
-      {isRealized && monthly.length > 0 && (
-        <>
-          <SectionTitle>By month</SectionTitle>
-          <Card className="px-4 py-3">
-            <MonthlyBars months={monthly} />
-          </Card>
-        </>
-      )}
-
-      {/* By strategy */}
-      <SectionTitle>By strategy</SectionTitle>
+      {/* By strategy — the short/long lens re-scopes the whole realized/open view */}
+      <SectionTitle
+        action={
+          <div className="flex rounded-lg border border-border bg-surface-2 p-0.5 text-[11px] font-medium">
+            {(["both", "short", "long"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSide(s)}
+                className={`rounded-md px-2 py-0.5 capitalize transition-colors ${
+                  side === s ? "bg-surface text-text shadow-sm" : "text-muted"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        By strategy
+      </SectionTitle>
       {buckets.length === 0 ? (
         <Card className="px-4 py-6 text-center text-[12px] text-muted">
           No {isRealized ? "closed trades in this range" : "open positions"} yet.
@@ -403,36 +414,6 @@ function CumulativeChart({ points }: { points: { date: string; cum: number }[] }
         <path d={area} fill={fill} />
         <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
       </svg>
-    </div>
-  );
-}
-
-function MonthlyBars({ months }: { months: { key: string; pnl: number }[] }) {
-  const maxAbs = Math.max(1, ...months.map((m) => Math.abs(m.pnl)));
-  const label = (k: string) => {
-    const m = Number(k.split("-")[1]);
-    return ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m] ?? k;
-  };
-  return (
-    <div className="flex items-end justify-between gap-1.5">
-      {months.map((m) => {
-        const h = (Math.abs(m.pnl) / maxAbs) * 38;
-        const pos = m.pnl >= 0;
-        return (
-          <div key={m.key} className="flex flex-1 flex-col items-center">
-            <div className="flex w-full flex-col items-center">
-              <div className="flex h-[40px] w-full items-end justify-center">
-                {pos && <div className="w-3 rounded-t bg-emerald-500/70" style={{ height: `${h}px` }} />}
-              </div>
-              <div className="h-px w-full bg-border" />
-              <div className="flex h-[40px] w-full items-start justify-center">
-                {!pos && <div className="w-3 rounded-b bg-rose-500/70" style={{ height: `${h}px` }} />}
-              </div>
-            </div>
-            <div className="mt-1 text-[9px] text-muted">{label(m.key)}</div>
-          </div>
-        );
-      })}
     </div>
   );
 }
