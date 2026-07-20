@@ -11,7 +11,8 @@ import { optionPnl, equityPnl, daysBetween } from "@/lib/calc";
 import { PnlView, type BucketInput } from "@/components/PnlView";
 import { BuildHistory } from "@/components/BuildHistory";
 import { CostBasisAlert } from "@/components/CostBasisAlert";
-import { readUnresolvedStocks } from "@/lib/bridge-files";
+import { ManualStockEntry } from "@/components/ManualStockEntry";
+import { readUnresolvedStocks, readManualStockSales } from "@/lib/bridge-files";
 import type { OptionKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -75,6 +76,8 @@ export default async function PnlPage() {
   const hasHistory = realized.some((b) => b.items.length > 0);
   // Stock sales the bridge couldn't auto-cost (bought before our data history).
   const unresolved = readUnresolvedStocks();
+  // Fully user-added sales that predate the data window entirely.
+  const manualSales = readManualStockSales();
 
   return (
     <main className="px-4">
@@ -95,6 +98,7 @@ export default async function PnlPage() {
             pull your realized trades from Schwab.
           </p>
         )}
+        <ManualStockEntry sales={manualSales} />
         <PnlView realized={realized} open={open} />
       </ShowAmounts>
     </main>

@@ -167,6 +167,7 @@ export function readReportStatus(): ReportStatus {
 // so a read-merge is fine), and the bridge reads it back on its next rebuild.
 const UNRESOLVED_PATH = path.join(process.cwd(), "data", "stocks-unresolved.json");
 const MANUAL_BASIS_PATH = path.join(process.cwd(), "data", "manual_cost_basis.json");
+const MANUAL_SALES_PATH = path.join(process.cwd(), "data", "manual_stock_sales.json");
 
 export interface UnresolvedStock {
   id: string;
@@ -204,4 +205,44 @@ export function saveManualCostBasis(id: string, costPerShare: number, acquiredDa
   cur[id] = acq ? { costPerShare, acquiredDate: acq } : { costPerShare };
   fs.mkdirSync(path.dirname(MANUAL_BASIS_PATH), { recursive: true });
   fs.writeFileSync(MANUAL_BASIS_PATH, JSON.stringify(cur, null, 2));
+}
+
+// ── Fully user-added closed stock sales (predate the feed entirely, so they never
+//    surface as orphans). Stored as a list the bridge reads on rebuild. ──
+export interface ManualStockSale {
+  id: string;
+  symbol: string;
+  shares: number;
+  proceedsPerShare: number;
+  costPerShare: number;
+  acquiredDate: string; // ISO
+  soldDate: string; // ISO
+}
+
+export function readManualStockSales(): ManualStockSale[] {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(MANUAL_SALES_PATH, "utf8"));
+    return Array.isArray(parsed) ? (parsed as ManualStockSale[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeManualStockSales(list: ManualStockSale[]): void {
+  fs.mkdirSync(path.dirname(MANUAL_SALES_PATH), { recursive: true });
+  fs.writeFileSync(MANUAL_SALES_PATH, JSON.stringify(list, null, 2));
+}
+
+/** Append a user-added closed stock sale; returns the stored row (with its id). */
+export function addManualStockSale(sale: Omit<ManualStockSale, "id">): ManualStockSale {
+  const list = readManualStockSales();
+  const row: ManualStockSale = { ...sale, id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}` };
+  list.push(row);
+  writeManualStockSales(list);
+  return row;
+}
+
+/** Remove a user-added sale by id. */
+export function deleteManualStockSale(id: string): void {
+  writeManualStockSales(readManualStockSales().filter((s) => s.id !== id));
 }
