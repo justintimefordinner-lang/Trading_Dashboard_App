@@ -32,6 +32,7 @@ export interface Equity {
   coveredCalls?: CoveredCallQuote[]; // ~30Δ call premiums at 1–4 week tenors (holdings ≥100 sh)
   bbSigma?: number | null; // current price's σ from its 20-day mean (−2 = lower band)
   gamma?: GammaWalls | null; // naive dealer-gamma walls from option OI (holdings ≥100 sh)
+  priceHistory?: number[] | null; // last ~7 daily closes (oldest→newest), for the expanded mini chart
 }
 
 // Naive dealer-gamma walls from option open interest — same shape the Brief uses.

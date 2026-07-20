@@ -11,6 +11,7 @@ import { Card, SectionTitle, Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
 import { DataRefresh } from "@/components/DataRefresh";
 import { compactMoney } from "@/components/OptionRow";
+import { Sparkline } from "@/components/charts";
 import { ClosedStocks } from "@/components/ClosedStocks";
 import { equityCost, equityPnl, equityPnlPct, equityValue, fmtMoney } from "@/lib/calc";
 import type { ClosedStock, Equity, OptionPosition } from "@/lib/types";
@@ -243,6 +244,29 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                               />
                             )}
                           </div>
+                          {e.priceHistory && e.priceHistory.length >= 2 && (() => {
+                            const ph = e.priceHistory;
+                            const chg = ph[ph.length - 1] - ph[0];
+                            const pct = ph[0] ? chg / ph[0] : 0;
+                            return (
+                              <div className="mt-2.5">
+                                <div className="mb-1 flex items-center justify-between text-[10px] text-muted">
+                                  <span>Last {ph.length} trading days</span>
+                                  <span className={chg >= 0 ? "text-emerald-300" : "text-rose-300"}>
+                                    {chg >= 0 ? "+" : "−"}${Math.abs(chg).toFixed(2)} · {chg >= 0 ? "+" : ""}
+                                    {(pct * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                                <div className="h-12 overflow-hidden rounded-md bg-surface/50 px-1 ring-1 ring-inset ring-border">
+                                  <Sparkline
+                                    data={ph.map((v, i) => ({ label: `d${i + 1}`, value: v }))}
+                                    height={48}
+                                    positive={chg >= 0}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })()}
                           {e.gamma && (
                             <div className="mt-2.5 text-[11px] text-muted">
                               <span className="font-semibold text-text">Gamma</span>{" "}
