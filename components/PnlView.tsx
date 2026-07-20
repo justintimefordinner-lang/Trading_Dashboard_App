@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Card, SectionTitle, Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -39,6 +39,13 @@ const ACCENT: Record<string, string> = {
 };
 
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}${fmtMoney(Math.abs(n))}`;
+
+// ISO date → "Jul 10, 2026" without touching the Date API.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fmtDate = (iso: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}` : iso;
+};
 
 // Compact dollars for tight sub-labels: $980, $14k, $1.2M.
 const fmtCompact = (n: number) => {
@@ -81,6 +88,7 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
   const tf = useTimeFilter("months", 1); // default to the last 1 month
   const [mode, setMode] = useState<"realized" | "open">("realized");
   const [term, setTerm] = useState<TermFilter>("both");
+  const [cumScrub, setCumScrub] = useState<number | null>(null);
 
   const isRealized = mode === "realized";
   const source = isRealized ? realized : open;
@@ -114,6 +122,9 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
     let run = 0;
     return dated.map((it) => ({ date: it.date, cum: (run += it.pnl) }));
   }, [dated]);
+  // Press-and-drag on the cumulative chart shows the running realized P&L at a past point.
+  const cumPoint =
+    cumScrub !== null && cumScrub >= 0 && cumScrub < cumulative.length ? cumulative[cumScrub] : null;
 
   const total = buckets.reduce((s, b) => s + b.pnl, 0);
   const totalCount = buckets.reduce((s, b) => s + b.count, 0);
@@ -193,12 +204,18 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
 
       {/* Hero total */}
       <Card className="mt-3 px-4 py-4">
-        <div className="text-xs text-muted">{isRealized ? "Total realized P&L" : "Total open P&L · unrealized"}</div>
-        <div className={`tabular mt-0.5 text-4xl font-bold ${total >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-          <Amt>{signed(total)}</Amt>
+        <div className="text-xs text-muted">
+          {cumPoint ? "Realized P&L to date" : isRealized ? "Total realized P&L" : "Total open P&L · unrealized"}
+        </div>
+        <div
+          className={`tabular mt-0.5 text-4xl font-bold ${(cumPoint ? cumPoint.cum : total) >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+        >
+          <Amt>{signed(cumPoint ? cumPoint.cum : total)}</Amt>
         </div>
         <div className="mt-1 text-[12px] text-muted">
-          {isRealized ? (
+          {cumPoint ? (
+            <>as of {fmtDate(cumPoint.date)}</>
+          ) : isRealized ? (
             <>
               {totalCount} closed {totalCount === 1 ? "trade" : "trades"} · {rangeSubLabel(range)}
             </>
@@ -211,7 +228,7 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
 
         {isRealized && cumulative.length >= 2 && (
           <div className="mt-3">
-            <CumulativeChart points={cumulative} />
+            <CumulativeChart points={cumulative} onScrub={setCumScrub} />
           </div>
         )}
       </Card>
@@ -399,31 +416,108 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
   );
 }
 
-function CumulativeChart({ points }: { points: { date: string; cum: number }[] }) {
+// Cumulative realized P&L, press-and-drag scrubbable (same interaction as the home
+// hero chart): dragging reports the touched index via onScrub so the header can show
+// the running P&L at that date. Drag is tracked with window listeners so it never
+// drops when the finger leaves the chart; overlays are HTML-positioned so the dot
+// stays round and the line crisp under the horizontal stretch.
+function CumulativeChart({
+  points,
+  onScrub,
+}: {
+  points: { date: string; cum: number }[];
+  onScrub?: (idx: number | null) => void;
+}) {
   const W = 320;
   const H = 96;
   const P = 6;
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState<number | null>(null);
+  const n = points.length;
   const cums = points.map((p) => p.cum);
   const minY = Math.min(0, ...cums);
   const maxY = Math.max(0, ...cums);
   const spanY = maxY - minY || 1;
-  const x = (i: number) => P + (i / (points.length - 1)) * (W - 2 * P);
+  const x = (i: number) => P + (i / (n - 1)) * (W - 2 * P);
   const y = (v: number) => P + (1 - (v - minY) / spanY) * (H - 2 * P);
-  const last = cums[cums.length - 1];
+  const last = cums[n - 1];
   const up = last >= 0;
   const stroke = up ? "#34d399" : "#fb7185";
   const fill = up ? "rgba(52,211,153,0.14)" : "rgba(251,113,133,0.14)";
   const line = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.cum).toFixed(1)}`).join(" ");
   const zeroY = y(0);
-  const area = `${line} L${x(points.length - 1).toFixed(1)},${zeroY.toFixed(1)} L${x(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
+  const area = `${line} L${x(n - 1).toFixed(1)},${zeroY.toFixed(1)} L${x(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
+  const interactive = n >= 2;
+
+  const idxFrom = (clientX: number): number | null => {
+    const el = wrapRef.current;
+    if (!el || !interactive) return null;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) return null;
+    const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+    return Math.round(frac * (n - 1));
+  };
+  const beginScrub = (e: React.PointerEvent) => {
+    if (!interactive) return;
+    e.preventDefault();
+    const apply = (clientX: number) => {
+      const i = idxFrom(clientX);
+      if (i === null) return;
+      setActive(i);
+      onScrub?.(i);
+    };
+    apply(e.clientX);
+    const move = (ev: PointerEvent) => {
+      ev.preventDefault();
+      apply(ev.clientX);
+    };
+    const end = () => {
+      setActive(null);
+      onScrub?.(null);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
+  const fracPct = active !== null ? (active / (n - 1)) * 100 : 0;
+  const topPct = active !== null ? (y(points[active].cum) / H) * 100 : 0;
+
   return (
     <div>
       <div className="mb-1 text-[10px] text-muted">Cumulative realized P&L</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" preserveAspectRatio="none">
-        <line x1={P} y1={zeroY} x2={W - P} y2={zeroY} stroke="currentColor" strokeOpacity="0.18" strokeWidth="1" />
-        <path d={area} fill={fill} />
-        <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      </svg>
+      <div
+        ref={wrapRef}
+        className="relative select-none"
+        style={interactive ? { touchAction: "none" } : undefined}
+        onPointerDown={interactive ? beginScrub : undefined}
+      >
+        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" preserveAspectRatio="none">
+          <line x1={P} y1={zeroY} x2={W - P} y2={zeroY} stroke="currentColor" strokeOpacity="0.18" strokeWidth="1" />
+          <path d={area} fill={fill} />
+          <path
+            d={line}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        {active !== null && (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 w-px bg-white/25" style={{ left: `${fracPct}%` }} />
+            <div
+              className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{ left: `${fracPct}%`, top: `${topPct}%`, backgroundColor: stroke, boxShadow: "0 0 0 2px rgba(10,12,16,0.85)" }}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }
