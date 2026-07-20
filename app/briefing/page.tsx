@@ -3,6 +3,7 @@ import { AmReportView } from "@/components/AmReportView";
 import { getAmReport } from "@/lib/am-report";
 import { getRefreshStatus } from "@/lib/refresh-status";
 import { DataRefresh } from "@/components/DataRefresh";
+import { BriefingRefresh } from "@/components/BriefingRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default function BriefingPage() {
             "Run am_report.py to build the report"
           )
         }
+        right={report ? <BriefingRefresh /> : undefined}
       />
       {report ? (
         <AmReportView report={report} />

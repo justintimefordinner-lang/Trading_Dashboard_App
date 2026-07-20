@@ -134,6 +134,33 @@ export function readHistoryStatus(): HistoryStatus {
   }
 }
 
+// ── Morning Brief refresh: write-only trigger + one-way status read ──
+const REPORT_REFRESH_MARKER = path.join(TASK_INBOX_DIR, "refresh_report");
+const REPORT_STATUS_PATH = path.join(process.cwd(), "data", "report-status.json");
+
+/** Drop the "rebuild the morning brief now" marker for the bridge. Write-only. */
+export function requestReportRefresh(): void {
+  fs.mkdirSync(TASK_INBOX_DIR, { recursive: true });
+  fs.writeFileSync(REPORT_REFRESH_MARKER, "");
+}
+
+export interface ReportStatus {
+  status: "idle" | "running" | "done" | "error";
+  error: string | null;
+  updatedAt: string | null;
+}
+
+/** Read the bridge-written report-refresh status from the app's OWN data/ folder. */
+export function readReportStatus(): ReportStatus {
+  const fallback: ReportStatus = { status: "idle", error: null, updatedAt: null };
+  try {
+    const raw = fs.readFileSync(REPORT_STATUS_PATH, "utf8");
+    return { ...fallback, ...(JSON.parse(raw) as Partial<ReportStatus>) };
+  } catch {
+    return fallback;
+  }
+}
+
 // ── Manual cost basis for stock sales whose purchase predates the data window ──
 // These two files live in the app's OWN data/ folder (the shared diode): the bridge
 // writes stocks-unresolved.json, the app writes manual_cost_basis.json (not a secret,
