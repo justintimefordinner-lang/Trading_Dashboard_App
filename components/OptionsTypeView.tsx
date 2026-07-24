@@ -93,6 +93,7 @@ export function OptionsTypeView({
   closedLeaps,
   initialCspFilter,
   initialStatus = "open",
+  statusFromUrl = false,
   closedMode,
   closedMonths,
 }: {
@@ -102,10 +103,11 @@ export function OptionsTypeView({
   closedLeaps: ClosedLeap[];
   initialCspFilter?: CspFilter; // deep-link from the home action center
   initialStatus?: Status; // deep-link straight to Open or Closed
+  statusFromUrl?: boolean; // true when ?view= set it — then it wins over persisted
   closedMode?: "all" | "ytd" | "months" | "today"; // carry the P&L time window in
   closedMonths?: number;
 }) {
-  const [status, setStatus] = usePersistentState<Status>("options-status", initialStatus);
+  const [status, setStatus] = usePersistentState<Status>("options-status", initialStatus, statusFromUrl);
   const [cspFilter, setCspFilter] = useState<CspFilter | null>(initialCspFilter ?? null);
   const [cashBucket, setCashBucket] = useState<number | null>(null);
   const [sort, setSort] = usePersistentState<Sort>("options-sort", type === "csp" ? { key: "yr", dir: "asc" } : { key: "value", dir: "desc" });

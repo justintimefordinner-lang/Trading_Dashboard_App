@@ -43,7 +43,7 @@ export default async function OptionsLeapPage({ searchParams }: { searchParams: 
           right={<BackLink />}
         />
         <TickerBar tickers={tickers} active={sym} base="/options/leap" />
-        <OptionsTypeView type="leap" open={open} closedCsps={closedCsps} closedLeaps={closedLeaps} initialStatus={view === "closed" ? "closed" : "open"} closedMode={closedMode} closedMonths={closedMonths} />
+        <OptionsTypeView type="leap" open={open} closedCsps={closedCsps} closedLeaps={closedLeaps} initialStatus={view === "closed" ? "closed" : "open"} statusFromUrl={view === "open" || view === "closed"} closedMode={closedMode} closedMonths={closedMonths} />
       </ShowAmounts>
     </main>
   );

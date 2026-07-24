@@ -36,6 +36,11 @@ function readSession<T>(storageKey: string, fallback: T): T {
 export function usePersistentState<T>(
   key: string,
   initial: T,
+  // When true, `initial` is authoritative: it wins over any stored value and
+  // becomes the new stored value. Use for state an explicit URL param sets (e.g.
+  // a deep-link's ?view=), so the link lands on the intended view instead of
+  // whatever the user last left persisted. Left false, the stored value restores.
+  authoritative = false,
 ): [T, (next: T | ((prev: T) => T)) => void] {
   const pathname = usePathname();
   const storageKey = scopedKey(pathname, key);
@@ -44,10 +49,23 @@ export function usePersistentState<T>(
   // every render when callers pass a fresh object/array literal.
   const initialRef = useRef(initial);
   initialRef.current = initial;
+  // Re-apply an authoritative initial when its value changes (e.g. navigating the
+  // same route with a different ?view=), even though the storage key is unchanged.
+  const authKey = authoritative ? JSON.stringify(initial) : "";
 
   useIsoLayoutEffect(() => {
-    setValue(readSession(storageKey, initialRef.current));
-  }, [storageKey]);
+    if (authoritative) {
+      setValue(initialRef.current);
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify(initialRef.current));
+      } catch {
+        /* ignore */
+      }
+    } else {
+      setValue(readSession(storageKey, initialRef.current));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, authoritative, authKey]);
 
   const set = useCallback(
     (next: T | ((prev: T) => T)) => {

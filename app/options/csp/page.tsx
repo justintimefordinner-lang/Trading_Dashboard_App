@@ -62,6 +62,7 @@ export default async function OptionsCspPage({
           closedLeaps={closedLeaps}
           initialCspFilter={toCspFilter(filter)}
           initialStatus={view === "closed" ? "closed" : "open"}
+          statusFromUrl={view === "open" || view === "closed"}
           closedMode={closedMode}
           closedMonths={closedMonths}
         />

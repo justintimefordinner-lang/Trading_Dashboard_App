@@ -59,6 +59,7 @@ export function StrategyTypeView({
   closedCovered,
   closedSpreads,
   initialStatus = "open",
+  statusFromUrl = false,
   closedMode,
   closedMonths,
 }: {
@@ -67,10 +68,11 @@ export function StrategyTypeView({
   closedCovered: ClosedCoveredCall[];
   closedSpreads: ClosedSpread[];
   initialStatus?: Status;
+  statusFromUrl?: boolean; // true when ?view= set it — then it wins over persisted
   closedMode?: "all" | "ytd" | "months" | "today";
   closedMonths?: number;
 }) {
-  const [status, setStatus] = usePersistentState<Status>("strategy-status", initialStatus);
+  const [status, setStatus] = usePersistentState<Status>("strategy-status", initialStatus, statusFromUrl);
   const [sort, setSort] = usePersistentState<Sort>("strategy-sort", { key: "yr", dir: "asc" });
   const onSort = (key: string) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: SPREAD_DEFAULT_DIR[key] ?? "asc" }));

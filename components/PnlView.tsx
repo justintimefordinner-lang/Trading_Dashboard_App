@@ -172,6 +172,20 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
   const TICKER_CAP = 8;
   const shownTickers = showAllTickers ? tickers : tickers.slice(0, TICKER_CAP);
 
+  // Deep-link a ticker's strategy breakout row to that strategy's page, filtered to
+  // the stock and matching the current Realized/Open lens (+ the realized time
+  // range). Null for strategies without a dedicated page (e.g. "other").
+  const stratHref = (stratKey: string, sym: string): string | null => {
+    const route = STRATEGY_ROUTE[stratKey];
+    if (!route) return null;
+    const params = new URLSearchParams({ symbol: sym, view: isRealized ? "closed" : "open" });
+    if (isRealized) {
+      params.set("range", tf.mode);
+      params.set("months", String(tf.months));
+    }
+    return `${route}?${params.toString()}`;
+  };
+
   return (
     <div className="pb-24 pt-3 sm:pb-6">
       {/* Realized / Open */}
@@ -367,27 +381,47 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
                         <span className="tabular">{total !== 0 ? `${Math.round((t.pnl / Math.abs(total)) * 100)}% of net` : ""}</span>
                       </div>
                       <div className="mt-2 border-t border-border/40 pt-1">
-                        {t.trades.map((tr, i) => (
-                          <div key={i} className="py-1.5">
-                            <div className="flex items-center justify-between gap-2 text-[11px]">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ACCENT[tr.stratKey] ?? "bg-slate-400"}`} />
-                                <span className="font-medium">{SHORT_LABEL[tr.stratKey] ?? tr.stratLabel}</span>
-                                {tr.strikeLabel && <span className="text-muted">{tr.strikeLabel}</span>}
+                        {t.trades.map((tr, i) => {
+                          const href = stratHref(tr.stratKey, t.sym);
+                          const rowInner = (
+                            <>
+                              <div className="flex items-center justify-between gap-2 text-[11px]">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ACCENT[tr.stratKey] ?? "bg-slate-400"}`} />
+                                  <span className="font-medium">{SHORT_LABEL[tr.stratKey] ?? tr.stratLabel}</span>
+                                  {tr.strikeLabel && <span className="text-muted">{tr.strikeLabel}</span>}
+                                </div>
+                                <span className="flex shrink-0 items-center gap-1">
+                                  <span className={`tabular ${tr.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                                    <Amt>{signed(tr.pnl)}</Amt>
+                                  </span>
+                                  {href && <span className="text-[10px] text-muted">›</span>}
+                                </span>
                               </div>
-                              <span className={`tabular shrink-0 ${tr.pnl >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                                <Amt>{signed(tr.pnl)}</Amt>
-                              </span>
+                              {(tr.openedAt || tr.daysHeld != null || (isRealized && tr.date)) && (
+                                <div className="ml-3.5 mt-0.5 text-[10px] text-muted">
+                                  {tr.openedAt ? `opened ${tr.openedAt}` : ""}
+                                  {tr.daysHeld != null ? `${tr.openedAt ? " · " : ""}${tr.daysHeld}d held` : ""}
+                                  {isRealized && tr.date ? ` · closed ${tr.date}` : ""}
+                                </div>
+                              )}
+                            </>
+                          );
+                          return href ? (
+                            <Link
+                              key={i}
+                              href={href}
+                              className="-mx-1 block rounded-md px-1 py-1.5 active:bg-surface-2"
+                              title={`View ${SHORT_LABEL[tr.stratKey] ?? tr.stratLabel} for ${t.sym}`}
+                            >
+                              {rowInner}
+                            </Link>
+                          ) : (
+                            <div key={i} className="py-1.5">
+                              {rowInner}
                             </div>
-                            {(tr.openedAt || tr.daysHeld != null || (isRealized && tr.date)) && (
-                              <div className="ml-3.5 mt-0.5 text-[10px] text-muted">
-                                {tr.openedAt ? `opened ${tr.openedAt}` : ""}
-                                {tr.daysHeld != null ? `${tr.openedAt ? " · " : ""}${tr.daysHeld}d held` : ""}
-                                {isRealized && tr.date ? ` · closed ${tr.date}` : ""}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

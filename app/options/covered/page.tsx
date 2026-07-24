@@ -46,6 +46,7 @@ export default async function OptionsCoveredPage({ searchParams }: { searchParam
           closedCovered={closedCovered}
           closedSpreads={closedSpreads}
           initialStatus={view === "closed" ? "closed" : "open"}
+          statusFromUrl={view === "open" || view === "closed"}
           closedMode={closedMode}
           closedMonths={closedMonths}
         />
