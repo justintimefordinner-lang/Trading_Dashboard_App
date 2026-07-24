@@ -3,6 +3,7 @@
 // Realized stock round-trips (FIFO). Same time filter (YTD · calendar-month
 // slider · Today) and click-to-sort headers as the closed options views.
 import { useMemo, useState } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import type { ReactNode } from "react";
 import { Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -27,14 +28,14 @@ export function ClosedStocks({
   initialMonths?: number;
 }) {
   type Mode = "all" | "ytd" | "months" | "today";
-  const [mode, setMode] = useState<Mode>(initialMode ?? "months");
-  const [months, setMonths] = useState(initialMonths ?? 1);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [mode, setMode] = usePersistentState<Mode>("closedstk-mode", initialMode ?? "months");
+  const [months, setMonths] = usePersistentState("closedstk-months", initialMonths ?? 1);
+  const [openId, setOpenId] = usePersistentState<string | null>("closedstk-openid", null);
   const [now] = useState(() => Date.now());
 
   type SortKey = "closedAt" | "return" | "ann" | "pnl";
-  const [sortKey, setSortKey] = useState<SortKey>("closedAt");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortKey, setSortKey] = usePersistentState<SortKey>("closedstk-sortkey", "closedAt");
+  const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("closedstk-sortdir", "desc");
   const toggleSort = (k: SortKey) => {
     if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {

@@ -4,6 +4,7 @@
 // (default Open) switches between live positions and realized round-trips, so the
 // CSP and LEAP experiences are identical — just a different `type`.
 import { useState } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import Link from "next/link";
 import { Card, Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -104,10 +105,10 @@ export function OptionsTypeView({
   closedMode?: "all" | "ytd" | "months" | "today"; // carry the P&L time window in
   closedMonths?: number;
 }) {
-  const [status, setStatus] = useState<Status>(initialStatus);
+  const [status, setStatus] = usePersistentState<Status>("options-status", initialStatus);
   const [cspFilter, setCspFilter] = useState<CspFilter | null>(initialCspFilter ?? null);
   const [cashBucket, setCashBucket] = useState<number | null>(null);
-  const [sort, setSort] = useState<Sort>(type === "csp" ? { key: "yr", dir: "asc" } : { key: "value", dir: "desc" });
+  const [sort, setSort] = usePersistentState<Sort>("options-sort", type === "csp" ? { key: "yr", dir: "asc" } : { key: "value", dir: "desc" });
   const onSort = (key: string) => {
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: DEFAULT_DIR[key] ?? "asc" }));
   };

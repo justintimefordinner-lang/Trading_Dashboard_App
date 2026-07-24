@@ -4,7 +4,7 @@
 // plus a credit ledger. Mirrors the CSP table — collateral becomes the spread's
 // capital at risk, and Yr% is the annualized return on the remaining spread value
 // (the close/roll catalyst for credit spreads).
-import { useState } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import type { ReactNode } from "react";
 import { Card, SectionTitle } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -108,7 +108,7 @@ export function SpreadGroupCard({
 }
 
 function SpreadRow({ sp, real, sim }: { sp: Spread; real?: Spread; sim?: boolean }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = usePersistentState(`spreadrow:${sp.id}`, false);
   const simActive = !!(sim && real);
   const showPnl = simActive && Math.abs(sp.pnl - real!.pnl) >= 0.005;
   const showPct = simActive && Math.abs(sp.pnlPct - real!.pnlPct) >= 0.00005;

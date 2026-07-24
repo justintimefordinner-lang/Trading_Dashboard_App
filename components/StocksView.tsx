@@ -6,6 +6,7 @@
 // BB positioning, gamma walls and the ~30Δ covered-call premiums. Closed shows
 // realized round-trips with the shared time filter.
 import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { usePersistentSet, usePersistentState } from "@/lib/view-state";
 import { useRouter } from "next/navigation";
 import { Card, SectionTitle, Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -51,20 +52,13 @@ function Caret({ on, dir }: { on: boolean; dir: "asc" | "desc" }) {
 }
 
 export function StocksView({ equities, closed, initialStatus = "open", closedMode, closedMonths, laddersNextAt, coveredCalls = [] }: { equities: Equity[]; closed: ClosedStock[]; initialStatus?: Status; closedMode?: "all" | "ytd" | "months" | "today"; closedMonths?: number; laddersNextAt?: string; coveredCalls?: OptionPosition[] }) {
-  const [status, setStatus] = useState<Status>(initialStatus);
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const [sortKey, setSortKey] = useState<SortKey>("value");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [status, setStatus] = usePersistentState<Status>("stocks-status", initialStatus);
+  const { has, toggle } = usePersistentSet("stocks-open");
+  const [sortKey, setSortKey] = usePersistentState<SortKey>("stocks-sortkey", "value");
+  const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("stocks-sortdir", "desc");
   const router = useRouter();
   const [pendingCC, setPendingCC] = useState<string | null>(null); // symbol awaiting "View CC?" confirm
 
-  const toggle = (sym: string) =>
-    setOpen((prev) => {
-      const n = new Set(prev);
-      if (n.has(sym)) n.delete(sym);
-      else n.add(sym);
-      return n;
-    });
   const toggleSort = (k: SortKey) => {
     if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
@@ -180,7 +174,7 @@ export function StocksView({ equities, closed, initialStatus = "open", closedMod
                   const ccInfo = ccBySym.get(e.symbol.toUpperCase());
                   const ccN = ccInfo?.contracts ?? 0;
                   const ccFully = ccN > 0 && ccN * 100 >= e.qty;
-                  const isOpen = open.has(e.symbol);
+                  const isOpen = has(e.symbol);
                   return (
                     <Fragment key={e.symbol}>
                       <button

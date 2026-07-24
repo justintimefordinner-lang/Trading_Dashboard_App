@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import { Card } from "@/components/ui";
 import { Sparkline } from "@/components/charts";
 import type { VixAssessment, Regime, S5fiZone, S5fiTrend } from "@/lib/vix";
@@ -415,7 +416,7 @@ function buildRows(a: VixAssessment): IndRow[] {
 }
 
 export function VixIndicators({ a }: { a: VixAssessment }) {
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = usePersistentState<string | null>("vix-indicator-open", null);
   const rows = buildRows(a);
 
   return (

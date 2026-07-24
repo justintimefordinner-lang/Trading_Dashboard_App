@@ -4,7 +4,7 @@
 // exp/DTE/Δ, value, P/L. Tapped open: the full detail — CSPs mirror the CSP-tab
 // cards; LEAPs/hedges get the parallel long-option breakdown (incl. long-term-
 // gains status).
-import { useState } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import type { ReactNode } from "react";
 import { Amt } from "@/components/privacy";
 import { MiniBar } from "@/components/charts";
@@ -85,7 +85,7 @@ export function SimCell({ show, real, children }: { show: boolean; real: ReactNo
 }
 
 export function OptionRow({ o, real, sim }: { o: OptionPosition; real?: OptionPosition; sim?: boolean }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = usePersistentState(`optrow:${o.id}`, false);
   const toggle = () => setOpen((v) => !v);
   const dte = daysToExpiry(o.expiration);
   const pnl = optionPnl(o);

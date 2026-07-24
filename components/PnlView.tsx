@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { usePersistentSet, usePersistentState } from "@/lib/view-state";
 import Link from "next/link";
 import { Card, SectionTitle, Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -86,8 +87,8 @@ interface BucketAgg {
 
 export function PnlView({ realized, open }: { realized: BucketInput[]; open: BucketInput[] }) {
   const tf = useTimeFilter("months", 1); // default to the last 1 month
-  const [mode, setMode] = useState<"realized" | "open">("realized");
-  const [term, setTerm] = useState<TermFilter>("both");
+  const [mode, setMode] = usePersistentState<"realized" | "open">("pnl-mode", "realized");
+  const [term, setTerm] = usePersistentState<TermFilter>("pnl-term", "both");
   const [cumScrub, setCumScrub] = useState<number | null>(null);
 
   const isRealized = mode === "realized";
@@ -166,15 +167,8 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
   }, [source, isRealized, range, term]);
 
   const tickerMaxAbs = tickers.reduce((m, t) => Math.max(m, Math.abs(t.pnl)), 0);
-  const [showAllTickers, setShowAllTickers] = useState(false);
-  const [openSyms, setOpenSyms] = useState<Set<string>>(new Set());
-  const toggleSym = (sym: string) =>
-    setOpenSyms((prev) => {
-      const n = new Set(prev);
-      if (n.has(sym)) n.delete(sym);
-      else n.add(sym);
-      return n;
-    });
+  const [showAllTickers, setShowAllTickers] = usePersistentState("pnl-showall", false);
+  const { has: symOpen, toggle: toggleSym } = usePersistentSet("pnl-opensyms");
   const TICKER_CAP = 8;
   const shownTickers = showAllTickers ? tickers : tickers.slice(0, TICKER_CAP);
 
@@ -346,7 +340,7 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
         <>
           <Card className="divide-y divide-border">
             {shownTickers.map((t) => {
-              const isOpen = openSyms.has(t.sym);
+              const isOpen = symOpen(t.sym);
               return (
                 <div key={t.sym}>
                   <button onClick={() => toggleSym(t.sym)} className="block w-full px-4 py-2.5 text-left active:bg-surface-2">

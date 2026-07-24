@@ -4,7 +4,8 @@
 // filter (delta band, source), grouped by ticker with one line per strike across
 // the ~0.20–0.30 delta range. Each line shows strike, premium, and premium yield
 // (premium ÷ collateral) as a %.
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import type { CSPCandidate } from "@/lib/types";
 import {
   annualizedReturn,
@@ -78,10 +79,10 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 export function CspScreener({ candidates }: { candidates: CSPCandidate[] }) {
-  const [sortKey, setSortKey] = useState<SortKey>("yield");
-  const [deltaKey, setDeltaKey] = useState("all");
-  const [sourceKey, setSourceKey] = useState("all");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = usePersistentState<SortKey>("csp-sortkey", "yield");
+  const [deltaKey, setDeltaKey] = usePersistentState("csp-deltakey", "all");
+  const [sourceKey, setSourceKey] = usePersistentState("csp-sourcekey", "all");
+  const [openId, setOpenId] = usePersistentState<string | null>("csp-openid", null);
 
   const groups = useMemo(() => {
     const deltaMax = DELTAS.find((d) => d.key === deltaKey)!.max;

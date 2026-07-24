@@ -3,7 +3,8 @@
 // Briefing tab — renders data/am_report.json: the regime gate up top, the ranked
 // CSP board (tap a row for the full read), the VRP heat map by group, and a
 // collapsible steer-clear list of names that failed the gates.
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import { Card } from "@/components/ui";
 import { DataRefresh } from "@/components/DataRefresh";
 import { TIER_STYLE, VRP_STYLE } from "@/lib/am-report-types";
@@ -152,7 +153,7 @@ function RegimeBanner({ r }: { r: AmReport["regime"] }) {
 }
 
 function BoardRow({ row }: { row: AmBoardRow }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = usePersistentState(`amboard:${row.sym}`, false);
   const g = row.gamma;
   const c = row.chain;
   return (
@@ -226,7 +227,7 @@ function BoardRow({ row }: { row: AmBoardRow }) {
 }
 
 function HeatGroup({ g }: { g: AmVrpGroup }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = usePersistentState(`amheat:${g.group}`, false);
   return (
     <div>
       <button
@@ -295,7 +296,7 @@ function Movers({ movers }: { movers: NonNullable<AmReport["movers"]> }) {
 }
 
 export function AmReportView({ report }: { report: AmReport }) {
-  const [showSteer, setShowSteer] = useState(false);
+  const [showSteer, setShowSteer] = usePersistentState("am-showsteer", false);
   const sample = report.meta.source === "sample";
 
   return (

@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import Link from "next/link";
 import { Amt } from "@/components/privacy";
 import { fmtMoney } from "@/lib/calc";
+import { usePersistentSet } from "@/lib/view-state";
 
 export interface HoldingBreakout {
   key: string;
@@ -35,14 +36,7 @@ function tone(pct: number): { row: string; text: string } {
 }
 
 export function HoldingsTable({ rows }: { rows: HoldingRow[] }) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const toggle = (sym: string) =>
-    setOpen((prev) => {
-      const n = new Set(prev);
-      if (n.has(sym)) n.delete(sym);
-      else n.add(sym);
-      return n;
-    });
+  const { has, toggle } = usePersistentSet("holdings");
 
   if (rows.length === 0) {
     return <div className="rounded-xl border border-border px-4 py-5 text-center text-[12px] text-muted">No stock holdings.</div>;
@@ -60,7 +54,7 @@ export function HoldingsTable({ rows }: { rows: HoldingRow[] }) {
         <tbody className="divide-y divide-border">
           {rows.map((r) => {
             const t = tone(r.pct);
-            const isOpen = open.has(r.symbol);
+            const isOpen = has(r.symbol);
             const expandable = r.breakout.length > 0;
             return (
               <Fragment key={r.symbol}>

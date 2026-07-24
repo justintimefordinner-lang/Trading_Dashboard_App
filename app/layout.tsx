@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
+import { ScrollArea } from "@/components/ScrollArea";
 import { SkewHydrator } from "@/components/SkewHydrator";
 import { PrivacyProvider } from "@/components/privacy";
 import { MarginModeProvider } from "@/components/margin-mode";
@@ -51,7 +52,7 @@ export default function RootLayout({
           <PrivacyProvider>
             <MarginModeProvider>
               <SkewHydrator />
-              <div className="mx-auto min-h-0 w-full max-w-md flex-1 overflow-y-auto pb-[calc(4.75rem_+_env(safe-area-inset-bottom))] sm:pb-6">{children}</div>
+              <ScrollArea className="mx-auto min-h-0 w-full max-w-md flex-1 overflow-y-auto pb-[calc(4.75rem_+_env(safe-area-inset-bottom))] sm:pb-6">{children}</ScrollArea>
               <BottomNav />
             </MarginModeProvider>
           </PrivacyProvider>

@@ -5,6 +5,7 @@
 // two legs into one complete vertical (SpreadGroupCard) with net stats. Closed
 // round-trips render via ClosedStrategy. Mirrors the CSP/LEAP experience.
 import { useState } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import Link from "next/link";
 import { Card, Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -69,8 +70,8 @@ export function StrategyTypeView({
   closedMode?: "all" | "ytd" | "months" | "today";
   closedMonths?: number;
 }) {
-  const [status, setStatus] = useState<Status>(initialStatus);
-  const [sort, setSort] = useState<Sort>({ key: "yr", dir: "asc" });
+  const [status, setStatus] = usePersistentState<Status>("strategy-status", initialStatus);
+  const [sort, setSort] = usePersistentState<Sort>("strategy-sort", { key: "yr", dir: "asc" });
   const onSort = (key: string) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: SPREAD_DEFAULT_DIR[key] ?? "asc" }));
 

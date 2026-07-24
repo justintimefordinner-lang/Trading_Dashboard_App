@@ -5,6 +5,7 @@
 // closed view, but renders strategy-specific rows. Kept separate from
 // ClosedOptions so the proven CSP/LEAP view stays untouched.
 import { useMemo, useState } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import type { ReactNode } from "react";
 import { Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -34,16 +35,16 @@ export function ClosedStrategy({
   initialMonths?: number;
 }) {
   type Mode = "all" | "ytd" | "months" | "today";
-  const [mode, setMode] = useState<Mode>(initialMode ?? "months");
-  const [months, setMonths] = useState(initialMonths ?? 1);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [mode, setMode] = usePersistentState<Mode>("closedstrat-mode", initialMode ?? "months");
+  const [months, setMonths] = usePersistentState("closedstrat-months", initialMonths ?? 1);
+  const [openId, setOpenId] = usePersistentState<string | null>("closedstrat-openid", null);
   const [now] = useState(() => Date.now());
 
   // Click-to-sort on column headers; same column toggles asc/desc, a new column
   // starts descending (top-of-list = biggest / most recent).
   type SortKey = "closedAt" | "return" | "ann" | "pnl";
-  const [sortKey, setSortKey] = useState<SortKey>("closedAt");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortKey, setSortKey] = usePersistentState<SortKey>("closedstrat-sortkey", "closedAt");
+  const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("closedstrat-sortdir", "desc");
   const toggleSort = (k: SortKey) => {
     if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {

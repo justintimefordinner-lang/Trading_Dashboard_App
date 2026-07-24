@@ -4,6 +4,7 @@
 // filterable by period and by type (All / CSPs / LEAPs). Reached from the
 // Realized P/L stats on the Options page. Mirrors the CSP/LEAP closed tabs.
 import { useMemo, useState } from "react";
+import { usePersistentState } from "@/lib/view-state";
 import type { ReactNode } from "react";
 import { Stat } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -48,20 +49,20 @@ export function ClosedOptions({
 }) {
   // Time filter: a YTD button, a calendar-month slider, or a Today button.
   type Mode = "all" | "ytd" | "months" | "today";
-  const [mode, setMode] = useState<Mode>(initialMode ?? "months");
+  const [mode, setMode] = usePersistentState<Mode>("closedopt-mode", initialMode ?? "months");
   // Calendar months including the current one. Default = 1 (month-to-date). The
   // slider is laid out right→left (1 mo on the right, 6 mo on the left) and fills
   // from the right, via `direction: rtl` on the input below.
-  const [months, setMonths] = useState(initialMonths ?? 1);
-  const [type, setType] = useState<TypeKey>(initialType);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [months, setMonths] = usePersistentState("closedopt-months", initialMonths ?? 1);
+  const [type, setType] = usePersistentState<TypeKey>("closedopt-type", initialType);
+  const [openId, setOpenId] = usePersistentState<string | null>("closedopt-openid", null);
   const [now] = useState(() => Date.now());
 
   // Click-to-sort on column headers; same column toggles asc/desc, a new column
   // starts descending (top-of-list = biggest / most recent).
   type SortKey = "closedAt" | "return" | "ann" | "pnl";
-  const [sortKey, setSortKey] = useState<SortKey>("closedAt");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortKey, setSortKey] = usePersistentState<SortKey>("closedopt-sortkey", "closedAt");
+  const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("closedopt-sortdir", "desc");
   const toggleSort = (k: SortKey) => {
     if (k === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
