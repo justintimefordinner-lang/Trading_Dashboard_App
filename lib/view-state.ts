@@ -8,6 +8,7 @@
 // reload, matching the app's "resume this session" behavior.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { wasBackNavigation } from "./nav-history";
 
 // useLayoutEffect on the client (rehydrate before paint → no collapse-then-expand
 // flash); a no-op on the server to avoid the SSR warning.
@@ -55,15 +56,19 @@ export function usePersistentState<T>(
 
   useIsoLayoutEffect(() => {
     if (authoritative) {
+      // An explicit URL param (?view=) always wins, on any navigation.
       setValue(initialRef.current);
       try {
         sessionStorage.setItem(storageKey, JSON.stringify(initialRef.current));
       } catch {
         /* ignore */
       }
-    } else {
+    } else if (wasBackNavigation()) {
+      // Returning via Back/Forward — restore where you left off.
       setValue(readSession(storageKey, initialRef.current));
     }
+    // Fresh forward navigation: leave the default in place (don't restore). Stored
+    // state is untouched, so a later Back still restores. `set` keeps persisting.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, authoritative, authKey]);
 

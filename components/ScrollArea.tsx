@@ -7,6 +7,7 @@
 // by path in sessionStorage, to match the persisted expand/sort state.
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { markNavigationHandled, wasBackNavigation } from "@/lib/nav-history";
 
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
@@ -43,7 +44,10 @@ export function ScrollArea({ children, className }: { children: ReactNode; class
       }
     }
     prevPath.current = pathname;
-    const saved = readSaved(pathname);
+    // Restore the saved offset only when arriving via Back/Forward; a fresh forward
+    // navigation lands at the top. (The outgoing save above always runs, so Back
+    // still has a position to return to.)
+    const saved = wasBackNavigation() ? readSaved(pathname) : 0;
     lastTop.current = saved;
     // Re-apply across a few ticks: the page's persisted rows re-open a frame or
     // two later and grow the container, so an early set can land short. Each pass
@@ -63,6 +67,13 @@ export function ScrollArea({ children, className }: { children: ReactNode; class
       clearTimeout(t1);
       clearTimeout(t2);
     };
+  }, [pathname]);
+
+  // Clear the Back/Forward flag once this route change has settled. A passive
+  // effect runs after every component's restore layout effects, so they've all
+  // read the flag before it resets for the next navigation.
+  useEffect(() => {
+    markNavigationHandled();
   }, [pathname]);
 
   // Track the offset on every scroll (synchronously into the ref) and persist it
