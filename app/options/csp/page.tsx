@@ -37,8 +37,8 @@ export default async function OptionsCspPage({
   const open = allCsps
     .filter((o) => !sym || o.symbol.toUpperCase() === sym)
     .map((o) => ({ ...o, erDate: earnings[o.symbol.toUpperCase()] ?? null }));
-  const closedCsps = (await getClosedCsps()).closed;
-  const closedLeaps = (await getClosedLeaps()).closed;
+  const closedCsps = (await getClosedCsps()).closed.filter((c) => !sym || c.symbol.toUpperCase() === sym);
+  const closedLeaps = (await getClosedLeaps()).closed.filter((c) => !sym || c.symbol.toUpperCase() === sym);
 
   return (
     <main className="px-4">

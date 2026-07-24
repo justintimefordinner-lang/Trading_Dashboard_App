@@ -21,9 +21,9 @@ export default async function OptionsSpreadPage({ searchParams }: { searchParams
   const { mode: closedMode, months: closedMonths } = parseClosedWindow(range, months);
   const snap = await getSnapshot();
   const { id, data } = await getSelectedAccount(snap);
-  const closedCovered = (await getClosedCovered()).closed;
-  const closedSpreads = (await getClosedSpreads()).closed;
   const sym = symbol?.toUpperCase();
+  const closedCovered = (await getClosedCovered()).closed.filter((c) => !sym || c.symbol.toUpperCase() === sym);
+  const closedSpreads = (await getClosedSpreads()).closed.filter((c) => !sym || c.symbol.toUpperCase() === sym);
   const allSpreads = data.options.filter(isSpread);
   const tickers = [...new Set(allSpreads.map((o) => o.symbol.toUpperCase()))].sort();
   const open = allSpreads.filter((o) => !sym || o.symbol.toUpperCase() === sym);

@@ -25,8 +25,8 @@ export default async function OptionsLeapPage({ searchParams }: { searchParams: 
   const allLeaps = data.options.filter(isLeap);
   const tickers = [...new Set(allLeaps.map((o) => o.symbol.toUpperCase()))].sort();
   const open = allLeaps.filter((o) => !sym || o.symbol.toUpperCase() === sym);
-  const closedCsps = (await getClosedCsps()).closed;
-  const closedLeaps = (await getClosedLeaps()).closed;
+  const closedCsps = (await getClosedCsps()).closed.filter((c) => !sym || c.symbol.toUpperCase() === sym);
+  const closedLeaps = (await getClosedLeaps()).closed.filter((c) => !sym || c.symbol.toUpperCase() === sym);
 
   return (
     <main className="px-4">

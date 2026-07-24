@@ -18,8 +18,8 @@ export default async function StocksPage({ searchParams }: { searchParams: Promi
   const { mode: closedMode, months: closedMonths } = parseClosedWindow(range, months);
   const snap = await getSnapshot();
   const { id, data } = await getSelectedAccount(snap);
-  const closed = (await getClosedStocks()).closed;
   const sym = symbol?.toUpperCase();
+  const closed = (await getClosedStocks()).closed.filter((c) => !sym || c.symbol.toUpperCase() === sym);
   const tickers = [...new Set(data.equities.map((e) => e.symbol.toUpperCase()))].sort();
   const equities = sym ? data.equities.filter((e) => e.symbol.toUpperCase() === sym) : data.equities;
 
