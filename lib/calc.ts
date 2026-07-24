@@ -1,6 +1,6 @@
 // Derived metrics, formatting, and the rule-based insight engine.
 // All "what should I do" logic lives here so it can be tested and grown.
-import type { CryptoHolding, Equity, OptionPosition } from "./types";
+import type { CryptoHolding, Equity, OptionPosition, PortfolioSummary } from "./types";
 
 const MULT = 100; // standard options contract multiplier
 
@@ -241,6 +241,37 @@ export function spreadRiskCapital(options: OptionPosition[]): number {
   }
   return total;
 }
+/**
+ * Genuine uncommitted ("free") cash — the single source of truth for the Cash
+ * allocation slice AND the VIX reserve math, so the two always agree.
+ *
+ * Free cash = what's left of the account after every deployment (stock, long
+ * LEAP/hedge market value, CSP collateral, spread defined-risk, crypto), PLUS
+ * money-market / sweep balances (SWGXX etc.), which report as equity positions
+ * but are really cash.
+ *
+ * The deployment-derived remainder is floored at 0 BEFORE the sweep balance is
+ * added, so a margin account whose CSP notional exceeds its settled cash still
+ * shows its sweep cash as free — instead of a single `cash − collateral` clamp
+ * swallowing the sweep balance to $0.
+ */
+export function freeCashValue(
+  summary: PortfolioSummary,
+  equities: Equity[],
+  options: OptionPosition[],
+): number {
+  const leapCalls = options.filter((o) => o.kind === "leap-call").reduce((s, o) => s + optionMarketValue(o), 0);
+  const hedge = options.filter((o) => o.kind === "leap-put-hedge").reduce((s, o) => s + optionMarketValue(o), 0);
+  const cspColl = cspCollateralTotal(options);
+  const spread = spreadRiskCapital(options);
+  const moneyMarket = equities
+    .filter((e) => isCashEquivalent(e.symbol))
+    .reduce((s, e) => s + equityValue(e), 0);
+  const deployed = summary.equityValue + leapCalls + hedge + cspColl + spread + summary.cryptoValue;
+  const remainder = Math.max(0, summary.totalValue - deployed);
+  return remainder + moneyMarket;
+}
+
 /**
  * Date a long position first qualifies for long-term capital gains. The IRS rule
  * is "held MORE than one year," so the first eligible day is one year + one day

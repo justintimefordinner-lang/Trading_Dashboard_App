@@ -8,24 +8,20 @@ import { fmtMoney } from "@/lib/calc";
 // it tracks the Liquidity-only / Liquidity + Options BP toggle: in margin mode the
 // options buying power counts as available funds (raising Available, shrinking Raise).
 export function AvailableCash({
-  cash,
+  uncommitted,
   totalValue,
-  cspCollateral,
-  spreadRisk,
   optionsBuyingPower,
   targetLow,
   targetHigh,
 }: {
-  cash: number;
+  uncommitted: number; // free cash (calc.freeCashValue)
   totalValue: number;
-  cspCollateral: number;
-  spreadRisk: number;
   optionsBuyingPower: number;
   targetLow: number; // cash band low, e.g. 0.20
   targetHigh: number; // cash band high, e.g. 0.25
 }) {
   const { marginAware } = useMarginMode();
-  const fit = computeFit({ cash, totalValue, cspCollateral, spreadRisk, optionsBuyingPower }, marginAware);
+  const fit = computeFit({ uncommitted, totalValue, optionsBuyingPower }, marginAware);
   const raise = Math.max(0, targetLow * fit.base - fit.dryPowder); // to reach the band floor
   const deploy = Math.max(0, fit.dryPowder - targetHigh * fit.base); // excess over the band top
 

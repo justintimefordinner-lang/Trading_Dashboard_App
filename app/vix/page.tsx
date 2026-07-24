@@ -10,8 +10,7 @@ import { getSnapshot } from "@/lib/snapshot";
 import { getSelectedAccount } from "@/lib/account";
 import { getVixSnapshot } from "@/lib/vix-data";
 import { assessVix, REGIME_COLORS, type Regime } from "@/lib/vix";
-import { cspCollateralTotal, spreadRiskCapital } from "@/lib/calc";
-import type { OptionPosition } from "@/lib/types";
+import { freeCashValue } from "@/lib/calc";
 
 export const dynamic = "force-dynamic";
 
@@ -49,8 +48,7 @@ export default async function VixPage() {
         ) : (
           <VixBody
             vix={vix}
-            options={data.options}
-            cash={data.summary.cash}
+            uncommitted={freeCashValue(data.summary, data.equities, data.options)}
             totalValue={data.summary.totalValue}
             optionsBuyingPower={data.summary.optionsBuyingPower ?? 0}
           />
@@ -62,26 +60,18 @@ export default async function VixPage() {
 
 function VixBody({
   vix,
-  options,
-  cash,
+  uncommitted,
   totalValue,
   optionsBuyingPower,
 }: {
   vix: NonNullable<ReturnType<typeof getVixSnapshot>>;
-  options: OptionPosition[];
-  cash: number;
+  uncommitted: number; // free cash (calc.freeCashValue)
   totalValue: number;
   optionsBuyingPower: number;
 }) {
   const a = assessVix(vix);
   const tone = REGIME_COLORS[a.regime];
   const markerPct = Math.min(100, Math.max(0, (a.vix / 40) * 100));
-
-  // CSP collateral + spread defined-risk are the committed-capital inputs; the
-  // reserve/deployment % is computed client-side (PostureStats / PortfolioFit) so
-  // it can honor the margin-aware toggle.
-  const cspColl = cspCollateralTotal(options);
-  const spreadRisk = spreadRiskCapital(options);
 
   return (
     <>
@@ -125,10 +115,8 @@ function VixBody({
       <div className="mt-3 grid grid-cols-2 gap-2">
         <PostureStats
           a={a}
-          cash={cash}
+          uncommitted={uncommitted}
           totalValue={totalValue}
-          cspCollateral={cspColl}
-          spreadRisk={spreadRisk}
           optionsBuyingPower={optionsBuyingPower}
         />
       </div>
@@ -155,7 +143,7 @@ function VixBody({
 
       {/* Portfolio fit */}
       <SectionTitle>Your portfolio fit</SectionTitle>
-      <PortfolioFit a={a} cash={cash} totalValue={totalValue} cspCollateral={cspColl} spreadRisk={spreadRisk} optionsBuyingPower={optionsBuyingPower} />
+      <PortfolioFit a={a} uncommitted={uncommitted} totalValue={totalValue} optionsBuyingPower={optionsBuyingPower} />
 
       {/* Indicator panel */}
       <SectionTitle>Indicator panel</SectionTitle>

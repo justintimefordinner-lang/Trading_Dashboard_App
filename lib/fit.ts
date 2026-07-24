@@ -8,28 +8,29 @@
 //     powder (it's real deployable capacity), but the base stays the total
 //     account value — the VIX target is a share of the account, so OBP must not
 //     dilute the denominator.
+//
+// `uncommitted` is the genuine free-cash figure from calc.freeCashValue (net of
+// CSP/spread collateral, incl. money-market sweep). Callers pass it in rather
+// than re-deriving cash − collateral here, so the reserve always matches the
+// Cash slice of the allocation pie.
 
 export interface FitInputs {
-  cash: number;
+  uncommitted: number; // free cash (calc.freeCashValue)
   totalValue: number;
-  cspCollateral: number;
-  spreadRisk: number;
   optionsBuyingPower: number;
 }
 
 export interface FitResult {
-  uncommitted: number; // free cash (cash − CSP collateral − spread risk)
+  uncommitted: number; // free cash
   optionsBuyingPower: number; // OBP actually counted (0 when liquidity-only)
   dryPowder: number; // reserve numerator
   base: number; // reserve denominator
   reserve: number; // 0..1
   deployed: number; // 0..1
-  committed: number; // CSP collateral + spread risk
 }
 
 export function computeFit(i: FitInputs, marginAware: boolean): FitResult {
-  const committed = i.cspCollateral + i.spreadRisk;
-  const uncommitted = Math.max(0, i.cash - committed);
+  const uncommitted = Math.max(0, i.uncommitted);
   const obp = marginAware ? Math.max(0, i.optionsBuyingPower || 0) : 0;
   const dryPowder = uncommitted + obp;
   const base = i.totalValue; // account value; OBP lifts dry powder, not the base
@@ -41,6 +42,5 @@ export function computeFit(i: FitInputs, marginAware: boolean): FitResult {
     base,
     reserve,
     deployed: 1 - reserve,
-    committed,
   };
 }

@@ -10,21 +10,17 @@ import type { VixAssessment } from "@/lib/vix";
 
 export function PostureStats({
   a,
-  cash,
+  uncommitted,
   totalValue,
-  cspCollateral,
-  spreadRisk,
   optionsBuyingPower,
 }: {
   a: VixAssessment;
-  cash: number;
+  uncommitted: number; // free cash (calc.freeCashValue)
   totalValue: number;
-  cspCollateral: number;
-  spreadRisk: number;
   optionsBuyingPower: number;
 }) {
   const { marginAware } = useMarginMode();
-  const fit = computeFit({ cash, totalValue, cspCollateral, spreadRisk, optionsBuyingPower }, marginAware);
+  const fit = computeFit({ uncommitted, totalValue, optionsBuyingPower }, marginAware);
   return (
     <>
       <Stat

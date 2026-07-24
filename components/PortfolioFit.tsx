@@ -13,18 +13,14 @@ import { computeFit } from "@/lib/fit";
 // and the home dashboard so both stay in sync via the persisted toggle.
 export function PortfolioFit({
   a,
-  cash,
+  uncommitted,
   totalValue,
-  cspCollateral,
-  spreadRisk,
   optionsBuyingPower,
   bare = false,
 }: {
   a: VixAssessment;
-  cash: number;
+  uncommitted: number; // free cash (calc.freeCashValue)
   totalValue: number;
-  cspCollateral: number;
-  spreadRisk: number;
   optionsBuyingPower: number;
   // When true, render just the inner content (no Card wrapper) so a caller can
   // nest it inside a larger card — e.g. grouped with the VIX chip on the home page.
@@ -32,7 +28,7 @@ export function PortfolioFit({
 }) {
   const { marginAware, setMarginAware } = useMarginMode();
   const tone = REGIME_COLORS[a.regime];
-  const fit = computeFit({ cash, totalValue, cspCollateral, spreadRisk, optionsBuyingPower }, marginAware);
+  const fit = computeFit({ uncommitted, totalValue, optionsBuyingPower }, marginAware);
 
   const share = (n: number) => (fit.base > 0 ? Math.round((n / fit.base) * 100) : 0);
   const reserveGap = fit.reserve - a.targetReservePct; // + = more dry powder than target

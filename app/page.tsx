@@ -22,6 +22,7 @@ import {
   equityPnl,
   equityValue,
   fmtMoney,
+  freeCashValue,
   isCashEquivalent,
   isCashSettledIndex,
   optionMarketValue,
@@ -59,8 +60,6 @@ export default async function HomePage() {
   const cspCount = options.filter((o) => o.kind === "csp" && !isCashSettledIndex(o.symbol)).length;
   const spreadRisk = spreadRiskCapital(options);
   const theta = dailyThetaBreakdown(options);
-  // Cash not tied up securing CSPs/spreads. $0 once the account is fully deployed on margin.
-  const uncommittedCash = Math.max(0, summary.cash - cspCollateralValue - spreadRisk);
   // Capital deployed in options strategies: long LEAP/hedge value + CSP collateral
   // + spread defined risk. (Distinct from summary.optionsValue, the net mark.)
   const optionsCapital = leapCallsValue + hedgeValue + cspCollateralValue + spreadRisk;
@@ -69,20 +68,15 @@ export default async function HomePage() {
   // — orange above 20%, red at 28%+, keeping under a 30% self-imposed ceiling.
   const totalExposure = summary.equityValue + optionsCapital;
   const marginUsed = Math.max(0, totalExposure - summary.totalValue);
-  const freeCash = Math.max(
-    0,
-    summary.totalValue - summary.equityValue - leapCallsValue - hedgeValue - cspCollateralValue - spreadRisk - summary.cryptoValue,
-  );
   // Money-market / sweep funds (e.g. SWGXX) report as equity positions but are
   // really cash. Pull them out of Stocks and into the Cash slice.
   const moneyMarketValue = equities
     .filter((e) => isCashEquivalent(e.symbol))
     .reduce((s, e) => s + equityValue(e), 0);
   const stocksValue = Math.max(0, summary.equityValue - moneyMarketValue);
-  const cashValue = freeCash + moneyMarketValue;
-  // Liquid cash including money-market/sweep funds (e.g. SWGXX), fed to the fit so
-  // "Available" reflects all liquid cash, not just the brokerage cash line.
-  const liquidCash = summary.cash + moneyMarketValue;
+  // Genuine free cash — one figure shared by the Cash pie slice and the VIX
+  // reserve math (PortfolioFit / AvailableCash) so they can't disagree.
+  const cashValue = freeCashValue(summary, equities, options);
   const allocation: DonutSlice[] = [
     { label: "Stocks", value: stocksValue, color: "#34d399" },
     { label: "LEAPs", value: leapCallsValue, color: "#a78bfa" },
@@ -217,7 +211,7 @@ export default async function HomePage() {
         </Link>
         <BuyingPowerStat
           optionsBuyingPower={summary.optionsBuyingPower ?? summary.buyingPower}
-          uncommittedCash={uncommittedCash}
+          uncommittedCash={cashValue}
           marginUsed={marginUsed}
           totalValue={summary.totalValue}
         />
@@ -274,10 +268,8 @@ export default async function HomePage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-xs font-medium">Target: {vix.cashRange} Cash</div>
                   <AvailableCash
-                    cash={liquidCash}
+                    uncommitted={cashValue}
                     totalValue={summary.totalValue}
-                    cspCollateral={cspCollateralValue}
-                    spreadRisk={spreadRisk}
                     optionsBuyingPower={summary.optionsBuyingPower ?? 0}
                     targetLow={vix.targetReserveLow}
                     targetHigh={vix.targetReserveHigh}
@@ -291,10 +283,8 @@ export default async function HomePage() {
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted">Your portfolio</div>
               <PortfolioFit
                 a={vix}
-                cash={liquidCash}
+                uncommitted={cashValue}
                 totalValue={summary.totalValue}
-                cspCollateral={cspCollateralValue}
-                spreadRisk={spreadRisk}
                 optionsBuyingPower={summary.optionsBuyingPower ?? 0}
                 bare
               />

@@ -22,8 +22,9 @@ export function BuyingPowerStat({
   const { marginAware } = useMarginMode();
   const share = (v: number) => (totalValue > 0 ? `${Math.round((v / totalValue) * 100)}%` : "0%");
 
-  // Liquidity only → uncommitted cash (cash not tied up in CSP/spread collateral);
-  // shows $0 when the account is fully deployed on margin. No buying power, no margin line.
+  // Liquidity only → genuine free cash (calc.freeCashValue: net of CSP/spread
+  // collateral, incl. money-market sweep), the same figure as the Cash pie slice.
+  // No buying power, no margin line.
   if (!marginAware) {
     return (
       <Stat label="Uncommitted cash" value={<Amt>{fmtMoney(uncommittedCash)}</Amt>} pct={share(uncommittedCash)} />

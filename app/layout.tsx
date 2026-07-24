@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   description: "Personal options & equity portfolio cockpit",
   applicationName: "Portfolio",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Portfolio" },
+  icons: { apple: "/apple-icon.png" },
 };
 
 export const viewport: Viewport = {
