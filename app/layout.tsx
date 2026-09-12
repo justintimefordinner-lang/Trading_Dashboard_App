@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { ScrollArea } from "@/components/ScrollArea";
@@ -7,6 +8,8 @@ import { SkewHydrator } from "@/components/SkewHydrator";
 import { TickerLongPress } from "@/components/TickerLongPress";
 import { PrivacyProvider } from "@/components/privacy";
 import { MarginModeProvider } from "@/components/margin-mode";
+import { ThemeModeProvider } from "@/components/theme-mode";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { DEMO_MODE } from "@/lib/demo";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -17,6 +20,13 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+// Inter, scoped to the wide-surface pages only (/desktop, /overview); the
+// phone-frame app keeps Geist unchanged.
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -36,11 +46,49 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // /desktop and /overview are a genuinely different surface (wide sortable
+  // tables, not a phone-shaped app). The pathname comes from proxy.ts, since
+  // a Server Component root layout has no usePathname of its own. Every other
+  // route gets the phone-frame chrome as always.
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const isWideSurface = pathname.startsWith("/desktop") || pathname.startsWith("/overview");
+
+  if (isWideSurface) {
+    return (
+      <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} h-full antialiased`}>
+        {/* theme-light (globals.css) is the zero-JS default for this subtree;
+            ThemeModeProvider swaps in theme-dark client-side per the
+            light/dark/auto toggle fixed top-right. globals.css caps html/body
+            at the viewport with overflow hidden, so the ScrollArea here is what
+            scrolls, same as the phone frame's own inner panel. */}
+        <body className="theme-light h-full bg-bg font-[family-name:var(--font-inter)]">
+          <ThemeModeProvider>
+            <ThemeToggle />
+            <ScrollArea className="h-full w-full overflow-y-auto">
+              <PrivacyProvider>
+                <MarginModeProvider>
+                  <TickerLongPress />
+                  {DEMO_MODE && (
+                    <div className="bg-amber-500/15 px-4 py-1.5 text-center text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-500/30">
+                      Demo — sample portfolio, not real positions
+                    </div>
+                  )}
+                  {children}
+                </MarginModeProvider>
+              </PrivacyProvider>
+            </ScrollArea>
+          </ThemeModeProvider>
+          {DEMO_MODE && <Analytics />}
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html
       lang="en"

@@ -237,6 +237,11 @@ export function SettingsForm({
         <SkewSection initialSkew={initialSkew} />
       </MenuItem>
       <LinkItem
+        title="Desktop view"
+        subtitle="Wide-screen positions table, sector concentration, ticker chart and calculator."
+        href="/overview"
+      />
+      <LinkItem
         title="Contribute to development"
         subtitle="Optional. Chip in on Venmo to support ongoing work."
         href={CONTRIBUTE_URL}
