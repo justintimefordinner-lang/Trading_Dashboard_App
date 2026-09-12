@@ -103,7 +103,7 @@ export default async function RootLayout({
           <PrivacyProvider>
             <MarginModeProvider>
               <SkewHydrator />
-              {/* Hold any ticker for 2.5s anywhere in the app to open it in Lookup a Ticker. */}
+              {/* Hold any ticker for 1.8s anywhere in the app to open it in Lookup a Ticker. */}
               <TickerLongPress />
               {/* A public demo shows invented numbers, so say so plainly — with the
                   Example toggle hidden there's otherwise nothing marking it. */}
