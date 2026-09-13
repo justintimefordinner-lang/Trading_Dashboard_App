@@ -1,6 +1,6 @@
 "use client";
 
-// Hold any ticker, anywhere in the app, for HOLD_MS and it opens in Lookup a
+// Hold any ticker, anywhere in the app, for HOLD_MS (1.8s) and it opens in Lookup a
 // Ticker (/chart?symbol=…). One global listener rather than per-component
 // wiring: on pointer-down it reads the word under the finger straight from the
 // DOM text (caretPositionFromPoint), and if that word looks like a ticker the
@@ -15,7 +15,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export const HOLD_MS = 2500;
+export const HOLD_MS = 1800;
 const HINT_AFTER_MS = 450; // show the "hold to chart" pill once the press is clearly deliberate
 const MOVE_TOLERANCE_PX = 12;
 const TICKER_RE = /^[A-Z][A-Z0-9]{0,4}(\.[A-Z])?$/;
