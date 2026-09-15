@@ -6,6 +6,7 @@
 import { useState, type ReactNode } from "react";
 import { setIvSkew } from "@/lib/simConfig";
 import { SchwabConnect } from "@/components/SchwabConnect";
+import { CombineViews, type CombineAccountOption } from "@/components/CombineViews";
 
 function MenuItem({
   title,
@@ -212,10 +213,16 @@ export function SettingsForm({
   initialIntervals,
   initialSkew,
   bridges = [{ id: "primary", label: "Schwab" }],
+  accounts = [],
+  combineIds = [],
+  combinedSelected = false,
 }: {
   initialIntervals: Intervals;
   initialSkew: number;
   bridges?: { id: string; label: string }[];
+  accounts?: CombineAccountOption[];
+  combineIds?: string[];
+  combinedSelected?: boolean;
 }) {
   const multi = bridges.length > 1;
   return (
@@ -230,6 +237,16 @@ export function SettingsForm({
           <SchwabConnect bridge={b.id} />
         </MenuItem>
       ))}
+      <MenuItem
+        title="Combine views"
+        subtitle={
+          combineIds.length > 0
+            ? `Combined View is on · ${combineIds.length} of ${accounts.length} accounts`
+            : "Merge accounts into one Combined View"
+        }
+      >
+        <CombineViews accounts={accounts} initialIds={combineIds} combinedSelected={combinedSelected} />
+      </MenuItem>
       <MenuItem title="Refresh intervals" subtitle="How often each data source updates">
         <IntervalsSection initialIntervals={initialIntervals} />
       </MenuItem>

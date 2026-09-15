@@ -28,6 +28,9 @@ built-in demo dataset, so you can explore the whole UI immediately.
 - **Portfolio risk** — sector concentration against a per-sector cap, across every account.
   Sectors come from the bridge's `data/sectors.json` (Yahoo Finance — Schwab's API has none);
   correct any by hand under its `overrides` map
+- **Combined View** — Settings → Combine views picks which linked accounts to merge; a
+  "Combined View" entry then appears in the account switcher, summing balances, holdings,
+  positions and value history across them
 - **Example mode** — a full, self-consistent demo dataset so the app is presentable
   without exposing (or even having) real data
 
