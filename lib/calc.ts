@@ -301,12 +301,16 @@ export function daysBetween(fromISO: string, toISO: string = nowISO()): number {
   return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 /** Annualized return on the collateral if the put expires worthless.
- *  360-day convention, over remaining DTE — matches the CSP table's Yr % column. */
+ *  365-day convention, over remaining DTE — matches the CSP table's Yr % column. */
+/** Annualization factor: 365 days, matching the bridge's closed-trade files
+ *  (closed_trades.py annualizes on 365) so open and closed figures agree. */
+export const DAYS_PER_YEAR = 365;
+
 export function cspAnnualizedReturn(o: OptionPosition): number {
   const credit = optionBasis(o);
   const collateral = cspCollateral(o);
   const dte = Math.max(daysToExpiry(o.expiration), 1);
-  return (credit / collateral) * (360 / dte);
+  return (credit / collateral) * (DAYS_PER_YEAR / dte);
 }
 
 /**
@@ -323,7 +327,7 @@ export function cspRemainingYield(o: OptionPosition): number {
 /** Annualized return on the remaining premium over the days left to expiry. */
 export function cspRemainingAnnualized(o: OptionPosition): number {
   const dte = Math.max(daysToExpiry(o.expiration), 1);
-  return cspRemainingYield(o) * (360 / dte);
+  return cspRemainingYield(o) * (DAYS_PER_YEAR / dte);
 }
 
 // ---- insight engine ------------------------------------------------------
@@ -505,4 +509,60 @@ export function buildAlerts(options: OptionPosition[]): AlertItem[] {
   }
 
   return alerts.sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level]);
+}
+
+// ---- desktop positions table -------------------------------------------
+// Ported from jttyeung's fork. Capital base for the two CSP/covered-call
+// return figures is cspCollateral's GROSS strike notional (this app's
+// existing convention), not her net-of-credit variant.
+
+/** Return on capital for a short premium-selling position (CSP or covered
+ *  call) from the ORIGINAL trade's own term — credit ÷ capital, annualized
+ *  over days-to-expiry AT OPEN, not remaining DTE, so it doesn't run hot as
+ *  expiration approaches. Null for anything else, or when openedAt isn't
+ *  known. Used for the desktop table's APY column. */
+export function positionAnnualizedReturn(o: OptionPosition): number | null {
+  if (o.side !== "short" || (o.kind !== "csp" && o.kind !== "covered-call")) return null;
+  if (!o.openedAt) return null;
+  const capital = cspCollateral(o);
+  if (capital === 0) return null;
+  const credit = optionBasis(o);
+  const dteAtOpen = Math.max(daysToExpiry(o.expiration, o.openedAt), 1);
+  return (credit / capital) * (DAYS_PER_YEAR / dteAtOpen);
+}
+
+/** Static (unannualized) return on capital for a short CSP/covered call:
+ *  credit ÷ capital. Used for the desktop table's RoR% column. */
+export function positionReturnOnCapital(o: OptionPosition): number | null {
+  if (o.side !== "short" || (o.kind !== "csp" && o.kind !== "covered-call")) return null;
+  const capital = cspCollateral(o);
+  if (capital === 0) return null;
+  return optionBasis(o) / capital;
+}
+
+/** Return still on the table, annualized over the days remaining: the
+ *  buy-to-close cost ÷ capital × 365/DTE. Looks forward from today, so no
+ *  openedAt needed. Used for the desktop table's "APY Left" column. */
+export function positionRemainingAnnualizedReturn(o: OptionPosition): number | null {
+  if (o.side !== "short" || (o.kind !== "csp" && o.kind !== "covered-call")) return null;
+  const capital = cspCollateral(o);
+  if (capital === 0) return null;
+  const remaining = optionMarketValue(o);
+  const dte = Math.max(daysToExpiry(o.expiration), 1);
+  return (remaining / capital) * (DAYS_PER_YEAR / dte);
+}
+
+/** The underlying's own move today as a fraction, or null. Measured against
+ *  the SAME price the table displays (underlyingPrice first) so the number
+ *  and its percentage can never disagree; deliberately not underlyingLive,
+ *  which can hold a stale extended-hours print through the session. */
+export function spotPercentChange(o: {
+  underlyingPrice?: number;
+  underlyingLive?: number | null;
+  underlyingClose?: number | null;
+}): number | null {
+  const current = o.underlyingPrice ?? o.underlyingLive ?? null;
+  const close = o.underlyingClose ?? null;
+  if (current == null || close == null || close === 0) return null;
+  return (current - close) / close;
 }

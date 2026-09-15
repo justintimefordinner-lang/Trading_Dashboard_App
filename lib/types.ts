@@ -100,6 +100,8 @@ export interface OptionPosition {
   underlyingClose?: number | null; // regular-session close — Simulate reference price
   underlyingLive?: number | null; // current/after-hours last — Simulate target price
   dayValueChange?: number | null; // this leg's signed $ value move today (Top Movers)
+  dayValueChangeAsOf?: string; // YYYY-MM-DD — set only when dayValueChange is a fallback to the last real session
+  greeksAsOf?: string; // YYYY-MM-DD — set only when the Greeks are carried forward from an earlier session
   bbSigma?: number | null; // strike's σ from the underlying's 20-day mean (−2 = lower BB)
   chanceOfProfitShort?: number; // 0..1, for short positions
   openedAt?: string; // ISO date the position was opened (held positions only)

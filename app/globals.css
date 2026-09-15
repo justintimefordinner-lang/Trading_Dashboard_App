@@ -4,17 +4,98 @@
   --bg: #0a0e14;
   --surface: #121826;
   --surface-2: #1a2234;
+  /* A third surface tint, for the wide-surface light theme's box hierarchy.
+     Equal to --surface-2 here so the phone-frame app's Stat looks unchanged. */
+  --surface-3: #1a2234;
+  --header-box: var(--surface-3);
+  --header-box-text: var(--text);
   --border: #232c3f;
   --text: #e7ecf3;
   --muted: #8b97ad;
+  /* Semantic pos/neg tokens so shared components (Stat, Delta) read correctly
+     under the wide-surface themes below. These match the emerald-400/rose-400
+     the phone-frame app already used, so its look doesn't change. */
+  --pos: #34d399;
+  --neg: #fb7185;
+  /* Chip/badge hues for the wide-surface pages; defined here too so they
+     always resolve. The phone-frame app doesn't reference them. */
+  --accent: #d9ad5f;
+  --warn: #d3a06a;
+  --info: #94b8cf;
+  --violet: #b3a3d6;
+  --teal: #86c2b8;
+  --indigo: #a3addb;
+  --fuchsia: #d29fbb;
+}
+
+/* Scoped light/dark themes for the wide-surface pages (/desktop, /overview),
+   applied via a class on their own <body> branch in layout.tsx (see
+   components/theme-mode.tsx for the light/dark/auto toggle). The phone-frame
+   app's dark theme above is untouched. Both are soft and low-saturation:
+   every status/category color is one base value per theme, used at full
+   opacity for text and a low opacity for its background tint. Palette ported
+   from jttyeung's fork. */
+.theme-light {
+  --bg: #eef0f5;
+  --surface: #fafbfd;
+  --surface-2: #e4e6ea;
+  --surface-3: #dce1ec;
+  --header-box: var(--surface-3);
+  --header-box-text: var(--text);
+  --border: #c7ccd9;
+  --text: #3c3024;
+  --muted: #93816a;
+  --pos: #6fa06e;
+  --neg: #c96f52;
+  --accent: #c99a45;
+  --warn: #cc8542;
+  --info: #7099ab;
+  --violet: #9a84b5;
+  --teal: #5aa89d;
+  --indigo: #7c88b3;
+  --fuchsia: #b17a94;
+}
+
+.theme-dark {
+  --bg: #2c2b2a;
+  --surface: #383735;
+  --surface-2: #423f3c;
+  --surface-3: #423f3c;
+  --header-box: var(--surface-3);
+  --header-box-text: var(--text);
+  --border: #514e4a;
+  --text: #e8ddd0;
+  --muted: #a89a8a;
+  --pos: #8fc0a5;
+  --neg: #e0a89c;
+  --accent: #dab672;
+  --warn: #d3a06a;
+  --info: #94b8cf;
+  --violet: #b3a3d6;
+  --teal: #86c2b8;
+  --indigo: #a3addb;
+  --fuchsia: #d29fbb;
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-header-box: var(--header-box);
+  --color-header-box-text: var(--header-box-text);
   --color-border: var(--border);
+  --color-text: var(--text);
   --color-muted: var(--muted);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-accent: var(--accent);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-violet: var(--violet);
+  --color-teal: var(--teal);
+  --color-indigo: var(--indigo);
+  --color-fuchsia: var(--fuchsia);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
