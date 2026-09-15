@@ -126,7 +126,7 @@ export default async function HomePage() {
   const share = (v: number) => `${Math.round((v / summary.totalValue) * 100)}%`;
 
   return (
-    <main className="px-4">
+    <main className="px-4 tablet:px-6" data-wide="1">
       <PageHeader
         title="Portfolio"
         subtitle={
@@ -194,6 +194,11 @@ export default async function HomePage() {
         }
       />
 
+      {/* Tablet layout: two columns in source order — hero, balances, the two
+          quick-access cards | top movers, volatility — then allocation | holdings.
+          Phone: the same blocks stacked, unchanged. */}
+      <div className="tablet:grid tablet:grid-cols-2 tablet:gap-x-4 tablet:items-start">
+      <div>
       {/* Hero */}
       <HomeHeroSim
         totalValue={summary.totalValue}
@@ -277,6 +282,8 @@ export default async function HomePage() {
         </Card>
       </Link>
 
+      </div>
+      <div>
       {/* Top movers — day's change in net market value per ticker. Off-hours the
           option day P&L is frozen, so TopMovers projects it via Simulate instead. */}
       <TopMovers equities={equities} options={options} marketOpen={isRegularSession()} />
@@ -324,6 +331,8 @@ export default async function HomePage() {
         </>
       )}
 
+      </div>
+      <div>
       {/* Allocation */}
       <SectionTitle>Allocation</SectionTitle>
       <Card className="px-4 py-4">
@@ -356,13 +365,20 @@ export default async function HomePage() {
         </p>
       </Card>
 
+      </div>
+      <div>
       {/* Holdings by ticker */}
-      <p className="mb-2 mt-3 px-1 text-[11px] text-muted">
+      <div className="hidden tablet:block">
+        <SectionTitle>Holdings by ticker</SectionTitle>
+      </div>
+      <p className="mb-2 mt-3 px-1 text-[11px] text-muted tablet:mt-0">
         Capital per ticker (stocks + CSPs + LEAPs + spreads) — <span className="font-medium text-orange-300">over 10%</span> and{" "}
         <span className="font-medium text-emerald-300">under 5%</span> highlighted; a{" "}
         <span className="font-medium text-emerald-300">CSP</span> tag marks names under 8.5% that are also on the CSP board.
       </p>
       <HoldingsTable rows={holdings} cspBoard={cspBoard} />
+      </div>
+      </div>
 
       <p className="mt-4 px-1 text-[11px] leading-relaxed text-muted">
         Data is a live snapshot from your Schwab account. The trend line fills in as

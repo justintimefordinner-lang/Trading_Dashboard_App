@@ -234,6 +234,10 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
         </div>
       )}
 
+      {/* Tablet layout: hero beside the win-rate and gross tiles, then By
+          strategy beside By ticker. Phone: the same blocks stacked, unchanged. */}
+      <div className="tablet:grid tablet:grid-cols-[3fr_2fr] tablet:gap-x-4 tablet:items-start">
+      <div>
       {/* Hero total */}
       <Card className="mt-3 px-4 py-4">
         <div className="text-xs text-muted">
@@ -286,7 +290,8 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
           </div>
         )}
       </Card>
-
+      </div>
+      <div>
       {/* Win rate */}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Stat
@@ -311,7 +316,11 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
         <Stat label="Gross profit" value={<Amt>{signed(winDollars)}</Amt>} tone="pos" />
         <Stat label="Gross loss" value={<Amt>{lossDollars > 0 ? signed(-lossDollars) : fmtMoney(0)}</Amt>} tone="neg" />
       </div>
+      </div>
+      </div>
 
+      <div className="tablet:grid tablet:grid-cols-2 tablet:gap-x-4 tablet:items-start">
+      <div>
       {/* By strategy */}
       <SectionTitle>By strategy</SectionTitle>
       {buckets.length === 0 ? (
@@ -417,7 +426,9 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
           ? "Realized P&L from reconstructed closed round-trips (FIFO). Stocks include assignment cost basis where available."
           : "Open P&L is current unrealized mark-to-market on live positions, grouped by strategy."}
       </p>
+      </div>
 
+      <div>
       {/* By ticker */}
       <SectionTitle>By ticker</SectionTitle>
       {tickers.length === 0 ? (
@@ -513,6 +524,8 @@ export function PnlView({ realized, open }: { realized: BucketInput[]; open: Buc
           )}
         </>
       )}
+      </div>
+      </div>
     </div>
   );
 }

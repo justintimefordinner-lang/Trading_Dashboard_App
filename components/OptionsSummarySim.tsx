@@ -146,6 +146,10 @@ export function OptionsSummarySim({
     <>
       {/* Capital wheel with the Simulate toggle overlaid in the top-right corner
           (matches the home hero). The toggle drives every re-priced number below. */}
+      {/* Tablet layout: capital wheel + totals on the left, the four strategy
+          cards on the right. Phone: the same blocks stacked, unchanged. */}
+      <div className="tablet:grid tablet:grid-cols-2 tablet:gap-x-4 tablet:items-start">
+      <div>
       {options.length > 0 && (
         <Card className="relative mt-4 px-4 py-4">
           <div className="absolute right-3 top-3 z-10">
@@ -192,15 +196,19 @@ export function OptionsSummarySim({
           sub={on ? "after-hours est." : "unrealized"}
         />
       </div>
+      </div>
 
+      <div>
       {/* Per-strategy summary cards — tap to drill in */}
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-3 grid grid-cols-2 gap-2 tablet:mt-4">
         <SideCard href="/options/csp" label="CSPs" count={csps.length} valueLabel="Premium received" {...cspC} on={on} accent="csp" />
         <SideCard href="/options/leap" label="LEAPs" count={leaps.length} {...leapC} on={on} accent="leap" />
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2">
         <SideCard href="/options/covered" label="Covered" count={covered.length} valueLabel="Premium received" {...covC} on={on} accent="covered" />
         <SideCard href="/options/spread" label="Spreads" count={spreads.length} valueLabel="Net value" {...sprC} on={on} accent="spread" />
+      </div>
+      </div>
       </div>
     </>
   );

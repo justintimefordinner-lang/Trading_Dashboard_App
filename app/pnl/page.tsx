@@ -80,7 +80,7 @@ export default async function PnlPage() {
   const manualSales = readManualStockSales();
 
   return (
-    <main className="px-4">
+    <main className="px-4 tablet:px-6" data-wide="1">
       <ShowAmounts>
         <PageHeader
           title="Profit & Loss"
