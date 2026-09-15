@@ -332,7 +332,10 @@ export default async function HomePage() {
       )}
 
       </div>
-      <div>
+      {/* Tablet: the pie is a fixed-size block, so it takes the right column and
+          Holdings — which grows with the number of names — runs down the left.
+          order-last flips them only on the grid; the phone stack stays as-is. */}
+      <div className="tablet:order-last">
       {/* Allocation */}
       <SectionTitle>Allocation</SectionTitle>
       <Card className="px-4 py-4">
