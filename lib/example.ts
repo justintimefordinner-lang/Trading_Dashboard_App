@@ -304,7 +304,7 @@ export const exampleSectors: SectorsFile = {
   overrides: {},
 };
 
-// Lookup-a-Ticker chart (app/api/chart) demo data. The route never reaches out
+// Chart-a-Ticker chart (app/api/chart) demo data. The route never reaches out
 // to Yahoo in example mode; it returns this fake-but-internally-consistent
 // series instead, seeded off the symbol's own characters so different tickers
 // look distinct rather than one line relabeled. Indicators are computed from

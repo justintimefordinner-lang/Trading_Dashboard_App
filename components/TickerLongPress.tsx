@@ -1,6 +1,6 @@
 "use client";
 
-// Hold any ticker, anywhere in the app, for HOLD_MS (1.8s) and it opens in Lookup a
+// Hold any ticker, anywhere in the app, for HOLD_MS (1.8s) and it opens in Chart a
 // Ticker (/chart?symbol=…). One global listener rather than per-component
 // wiring: on pointer-down it reads the word under the finger straight from the
 // DOM text (caretPositionFromPoint), and if that word looks like a ticker the

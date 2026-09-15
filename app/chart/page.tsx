@@ -6,7 +6,7 @@ import { getApproved } from "@/lib/approved";
 
 export const dynamic = "force-dynamic";
 
-// Lookup a Ticker: any symbol, charted on demand. Suggestions come from the
+// Chart a Ticker: any symbol, charted on demand. Suggestions come from the
 // approved universe plus every name currently held (stock or option underlying).
 export default async function ChartPage({ searchParams }: { searchParams: Promise<{ symbol?: string }> }) {
   const { symbol } = await searchParams;
@@ -23,7 +23,7 @@ export default async function ChartPage({ searchParams }: { searchParams: Promis
     <main className="px-4">
       <ShowAmounts>
         <PageHeader
-          title="Lookup a Ticker"
+          title="Chart a Ticker"
           subtitle="2-year daily · Bollinger · SMA 50/200 · MACD · RSI · walls for held names"
           right={<BackLink />}
         />

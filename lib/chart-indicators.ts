@@ -1,4 +1,4 @@
-// Chart data contract + the indicator math behind the Lookup-a-Ticker chart.
+// Chart data contract + the indicator math behind the Chart-a-Ticker chart.
 // Pure — no fs, no fetch, no React — so the API route, the demo fixture and any
 // test can share one implementation. The math mirrors the bridge's
 // indicators.py (SMA / EMA / MACD 12-26-9 / RSI 14 / Bollinger 20,2σ) and the
