@@ -65,9 +65,10 @@ export function Stat({
   /** Optional badge, e.g. share of portfolio. Stays visible when amounts are hidden. */
   pct?: ReactNode;
 }) {
-  const toneClass = tone === "pos" ? "text-pos" : tone === "neg" ? "text-neg" : "text-text";
+  const toneClass =
+    tone === "pos" ? "text-emerald-400" : tone === "neg" ? "text-rose-400" : "text-text";
   return (
-    <div className="rounded-xl border border-border bg-surface-3 px-3 py-2.5">
+    <div className="rounded-xl border border-border bg-surface-2 px-3 py-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[11px] uppercase tracking-wide text-muted">{label}</div>
         {pct !== undefined && (
@@ -108,7 +109,7 @@ export function Delta({ value, pct }: { value: number; pct?: number }) {
     maximumFractionDigits: 0,
   });
   return (
-    <span className={`tabular font-medium ${pos ? "text-pos" : "text-neg"}`}>
+    <span className={`tabular font-medium ${pos ? "text-emerald-400" : "text-rose-400"}`}>
       {sign}
       <Amt>{abs}</Amt>
       {pct !== undefined && (
