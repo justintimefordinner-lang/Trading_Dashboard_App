@@ -18,7 +18,7 @@ built-in demo dataset, so you can explore the whole UI immediately.
 - **Closed trades** — realized round-trips per strategy bucket
 - **Research & screeners** — approved-stock research signals and a CSP candidate screener
 - **Market context** — VIX regime guide and morning briefing
-- **Lookup a Ticker** — on-demand 2-year daily chart for any symbol: candles, Bollinger Bands,
+- **Chart a Ticker** — on-demand 2-year daily chart for any symbol: candles, Bollinger Bands,
   50/200-day SMA with golden/death cross markers, MACD and RSI panes, plus call/put walls for
   names you hold. Bars come from Yahoo Finance via the app's own `/api/chart` route. Hold any
   ticker anywhere in the app for 1.8 seconds to open it there

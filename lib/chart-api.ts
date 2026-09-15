@@ -1,4 +1,4 @@
-// Client-side call for the Lookup-a-Ticker chart. Unlike jttyeung's fork, which
+// Client-side call for the Chart-a-Ticker chart. Unlike jttyeung's fork, which
 // talks to a separate chart daemon on its own port, this app serves the chart
 // from its own route handler (app/api/chart/route.ts): same origin as the page,
 // so it works from a phone over Tailscale, on the Pi, and on the Vercel demo

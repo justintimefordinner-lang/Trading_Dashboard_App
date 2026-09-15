@@ -92,11 +92,11 @@ export default async function ResearchPage({
         subtitle={`Approved universe · ${approved.length} names${data ? "" : " · sync pending"}`}
       />
 
-      {/* Lookup a Ticker — on-demand 2-year chart for any symbol, not just the roster. */}
+      {/* Chart a Ticker — on-demand 2-year chart for any symbol, not just the roster. */}
       <Link href="/chart" className="mt-3 block active:opacity-80">
         <Card className="flex items-center justify-between gap-3 bg-violet-500/5 px-4 py-3 ring-1 ring-inset ring-violet-500/25">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-violet-200">Lookup a Ticker</div>
+            <div className="text-sm font-semibold text-violet-200">Chart a Ticker</div>
             <div className="text-[11px] text-muted">2-year chart · Bollinger, SMA 50/200, MACD, RSI, walls</div>
           </div>
           <span className="shrink-0 text-sm font-medium text-violet-300">Open ›</span>

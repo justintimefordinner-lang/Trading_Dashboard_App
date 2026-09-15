@@ -69,7 +69,7 @@ export default function RootLayout({
           <PrivacyProvider>
             <MarginModeProvider>
               <SkewHydrator />
-              {/* Hold any ticker for 1.8s anywhere in the app to open it in Lookup a Ticker. */}
+              {/* Hold any ticker for 1.8s anywhere in the app to open it in Chart a Ticker. */}
               <TickerLongPress />
               <SideRail />
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
