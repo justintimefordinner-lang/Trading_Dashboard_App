@@ -1,4 +1,5 @@
-import { PageHeader, SectionTitle } from "@/components/ui";
+import Link from "next/link";
+import { Card, PageHeader, SectionTitle } from "@/components/ui";
 import type { DonutSlice } from "@/components/charts";
 import { RefreshButton } from "@/components/RefreshButton";
 import { ShowAmounts } from "@/components/privacy";
@@ -57,6 +58,17 @@ export default async function OptionsPage() {
             The wheel lives inside the client island so the Simulate toggle can overlay
             its corner and drive every re-priced number in one place. */}
         <OptionsSummarySim options={options} allocation={allocation} stratTotal={stratTotal} />
+
+        {/* Tablet only: the wide all-positions table (the rail also links it). */}
+        <Link href="/positions" className="mt-3 hidden active:opacity-80 tablet:block">
+          <Card className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">Open positions table</div>
+              <div className="text-[11px] text-muted">Every option and stock across every account — Δ, IV, theta, returns, sortable</div>
+            </div>
+            <span className="shrink-0 text-sm font-medium text-muted">Open ›</span>
+          </Card>
+        </Link>
 
         <SectionTitle>How this works</SectionTitle>
         <p className="-mt-1 px-1 text-[11px] leading-relaxed text-muted">
