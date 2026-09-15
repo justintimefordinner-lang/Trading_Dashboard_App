@@ -3,7 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Account } from "@/lib/types";
-import { ACCOUNT_COOKIE, accountLabel } from "@/lib/account-shared";
+import {
+  ACCOUNT_COOKIE,
+  COMBINE_COOKIE,
+  COMBINED_ID,
+  COMBINED_LABEL,
+  accountLabel,
+  combinedAccount,
+  parseCombineIds,
+  readClientCookie,
+} from "@/lib/account-shared";
 
 // Cross-app jump: this dashboard and its sibling run on adjacent ports on the
 // same host (Schwab :3000, Wheel Toolkit :3001). Keep whatever host you're on
@@ -24,6 +33,9 @@ export function AccountSwitcher({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [other, setOther] = useState<{ label: string; href: string } | null>(null);
+  // Accounts picked in Settings → Combine views. Read client-side from the
+  // cookie so no page has to pass it down; empty means the Combined View is off.
+  const [combineIds, setCombineIds] = useState<string[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,13 +52,38 @@ export function AccountSwitcher({
     if (target) setOther({ label: target.label, href: `${protocol}//${hostname}:${target.port}` });
   }, []);
 
-  const current = accounts.find((a) => a.id === selectedId) ?? accounts[0];
+  useEffect(() => {
+    const known = new Set(accounts.map((a) => a.id));
+    setCombineIds(parseCombineIds(readClientCookie(COMBINE_COOKIE)).filter((id) => known.has(id)));
+  }, [accounts]);
+
+  const members = accounts.filter((a) => combineIds.includes(a.id));
+  const combinedOn = members.length > 0;
+  const combined = combinedAccount(members);
+  const current =
+    selectedId === COMBINED_ID ? combined : (accounts.find((a) => a.id === selectedId) ?? accounts[0]);
 
   function select(id: string) {
     document.cookie = `${ACCOUNT_COOKIE}=${id}; path=/; max-age=31536000; samesite=lax`;
     setOpen(false);
     if (id !== selectedId) router.refresh();
   }
+
+  const check = (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0 text-emerald-400"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
 
   return (
     <div ref={ref} className="relative inline-block">
@@ -78,6 +115,21 @@ export function AccountSwitcher({
           role="listbox"
           className="absolute left-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-xl border border-border bg-surface shadow-xl shadow-black/40"
         >
+          {combinedOn && (
+            <button
+              role="option"
+              aria-selected={selectedId === COMBINED_ID}
+              onClick={() => select(COMBINED_ID)}
+              className="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2.5 text-left active:bg-surface-2"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium">{COMBINED_LABEL}</div>
+                <div className="truncate text-[11px] text-muted">{members.map(accountLabel).join(" + ")}</div>
+              </div>
+              {selectedId === COMBINED_ID && check}
+            </button>
+          )}
+
           {accounts.map((a) => {
             const active = a.id === current.id;
             return (
@@ -101,24 +153,19 @@ export function AccountSwitcher({
                     {a.mask} · {a.type}
                   </div>
                 </div>
-                {active && (
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="shrink-0 text-emerald-400"
-                  >
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                )}
+                {active && check}
               </button>
             );
           })}
+
+          {accounts.length > 1 && !combinedOn && (
+            <a
+              href="/settings"
+              className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-[11px] text-muted active:bg-surface-2"
+            >
+              Combine accounts in Settings ›
+            </a>
+          )}
 
           {other && (
             <a
