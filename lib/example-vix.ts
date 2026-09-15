@@ -11,11 +11,11 @@ export const exampleVix: VixSnapshot = {
   asof: new Date().toISOString(),
   source: "example",
   inputs: {
-    vix: 15.13,
-    vix9d: 13.9,
-    vix3m: 18.5,
-    vvix: 86.27,
-    skew: 141,
+    vix: 16.93,
+    vix9d: 16.91,
+    vix3m: 19.28,
+    vvix: 94.89,
+    skew: 152,
     realizedVol20: 11.8,
     realizedVol30: 12.6,
     realizedVolBasis: "SPY 20/30-day close-to-close",
@@ -26,6 +26,6 @@ export const exampleVix: VixSnapshot = {
     s5fiWeekly: [61.4, 60.2, 62.0, 59.3, 60.1, 58.4, 59.0, 58.1],
     // Nasdaq-100 Volatility Index — a real reading (captured separately from
     // the VIX value above), for the VIX/VXN divergence read in lib/vxn.ts.
-    vxn: 20.18,
+    vxn: 22.05,
   },
 };
