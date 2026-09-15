@@ -506,3 +506,52 @@ export function buildAlerts(options: OptionPosition[]): AlertItem[] {
 
   return alerts.sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level]);
 }
+
+// ---- Open Positions table ------------------------------------------------
+// Return figures for the wide positions table. Started from jttyeung's fork;
+// the capital base is cspCollateral's GROSS strike notional (this app's
+// convention), and the year is 365 days to match the bridge's closed-trade
+// files, so open and realized figures on the table agree.
+const POSITIONS_DAYS_PER_YEAR = 365;
+
+/** Static return on capital for a short CSP / covered call: credit ÷ collateral.
+ *  Null for anything else. */
+export function positionReturnOnCapital(o: OptionPosition): number | null {
+  if (o.side !== "short" || (o.kind !== "csp" && o.kind !== "covered-call")) return null;
+  const capital = cspCollateral(o);
+  if (capital === 0) return null;
+  return optionBasis(o) / capital;
+}
+
+/** The same return annualized over the ORIGINAL term (open → expiry), so it
+ *  stays put as expiration approaches. Null without openedAt. */
+export function positionAnnualizedReturn(o: OptionPosition): number | null {
+  const ror = positionReturnOnCapital(o);
+  if (ror == null || !o.openedAt) return null;
+  const term = Math.max(daysToExpiry(o.expiration, o.openedAt), 1);
+  return ror * (POSITIONS_DAYS_PER_YEAR / term);
+}
+
+/** Return still on the table, annualized over the days remaining: buy-to-close
+ *  cost ÷ collateral × 365/DTE. Looks forward from today; no openedAt needed. */
+export function positionRemainingAnnualizedReturn(o: OptionPosition): number | null {
+  if (o.side !== "short" || (o.kind !== "csp" && o.kind !== "covered-call")) return null;
+  const capital = cspCollateral(o);
+  if (capital === 0) return null;
+  const dte = Math.max(daysToExpiry(o.expiration), 1);
+  return (optionMarketValue(o) / capital) * (POSITIONS_DAYS_PER_YEAR / dte);
+}
+
+/** The underlying's move today as a fraction, measured against the same price
+ *  the table shows (underlyingPrice first, never a stale extended-hours live
+ *  print), so the number and its percentage can't disagree. */
+export function spotPercentChange(o: {
+  underlyingPrice?: number;
+  underlyingLive?: number | null;
+  underlyingClose?: number | null;
+}): number | null {
+  const current = o.underlyingPrice ?? o.underlyingLive ?? null;
+  const close = o.underlyingClose ?? null;
+  if (current == null || close == null || close === 0) return null;
+  return (current - close) / close;
+}

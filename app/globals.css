@@ -19,6 +19,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Tablet layout (lib/layout-mode.ts). <html data-layout="tablet"> switches the
+   shell from the phone frame to the 1024px canvas with a side rail; pages opt
+   into wider grids with the tablet: variant. :is() keeps the class specificity
+   above the sm: phone-frame utilities it has to override. */
+@custom-variant tablet (&:is([data-layout="tablet"] *));
+
+/* Text-heavy pages that have no tablet grid of their own stay a readable
+   column; pages that lay themselves out on a grid opt out with data-wide. */
+[data-layout="tablet"] main:not([data-wide]) {
+  max-width: 44rem;
+  margin-inline: auto;
+}
+
 html {
   height: 100%;
   /* The app shell (see layout.tsx) owns scrolling, so the document itself never

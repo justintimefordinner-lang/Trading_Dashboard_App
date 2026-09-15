@@ -6,6 +6,7 @@
 import { useState, type ReactNode } from "react";
 import { setIvSkew } from "@/lib/simConfig";
 import { SchwabConnect } from "@/components/SchwabConnect";
+import { LayoutToggle } from "@/components/LayoutToggle";
 import { CombineViews, type CombineAccountOption } from "@/components/CombineViews";
 
 function MenuItem({
@@ -252,6 +253,14 @@ export function SettingsForm({
       </MenuItem>
       <MenuItem title="Simulate skew" subtitle="After-hours what-if IV assumption">
         <SkewSection initialSkew={initialSkew} />
+      </MenuItem>
+      <MenuItem title="Layout" subtitle="Phone frame or the wide tablet canvas">
+        <p className="mb-2 text-xs text-muted">
+          Auto picks the tablet layout on screens 900px and wider (an iPad in landscape, any laptop or monitor)
+          and the phone layout otherwise. The canvas never grows past about an iPad, so a big monitor just gets
+          more room around it.
+        </p>
+        <LayoutToggle />
       </MenuItem>
       <LinkItem
         title="Contribute to development"
