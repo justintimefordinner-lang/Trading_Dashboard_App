@@ -56,21 +56,23 @@ function SideCard({
   accent: "csp" | "leap" | "covered" | "spread";
 }) {
   return (
-    <Link href={href} className="group block">
-      <div className={`overflow-hidden rounded-2xl ring-1 ring-inset transition-colors ${ACCENT[accent]}`}>
-        <div className="flex items-center justify-between px-4 py-2.5">
+    <Link href={href} className="group block h-full">
+      {/* h-full + flex so the card can stretch to its grid row on the tablet
+          layout; the two value sections share any extra height evenly. */}
+      <div className={`flex h-full flex-col overflow-hidden rounded-2xl ring-1 ring-inset transition-colors ${ACCENT[accent]}`}>
+        <div className="flex shrink-0 items-center justify-between px-4 py-2.5">
           <span className="text-sm font-semibold">
             {label} <span className="font-normal text-muted">· {count}</span>
           </span>
           <span className="text-muted">›</span>
         </div>
-        <div className="border-t border-border/50 px-4 py-2.5">
+        <div className="flex flex-1 flex-col justify-center border-t border-border/50 px-4 py-2.5">
           <div className="text-[11px] text-muted">{valueLabel}</div>
           <div className="tabular text-base font-semibold">
             <SimValue oldV={realValue} newV={on ? simValue : realValue} />
           </div>
         </div>
-        <div className="border-t border-border/50 px-4 py-2.5">
+        <div className="flex flex-1 flex-col justify-center border-t border-border/50 px-4 py-2.5">
           <div className="text-[11px] text-muted">Gain/Loss</div>
           <div className="tabular text-base font-semibold">
             <SimValue oldV={realPnl} newV={on ? simPnl : realPnl} signed />
@@ -147,8 +149,9 @@ export function OptionsSummarySim({
       {/* Capital wheel with the Simulate toggle overlaid in the top-right corner
           (matches the home hero). The toggle drives every re-priced number below. */}
       {/* Tablet layout: capital wheel + totals on the left, the four strategy
-          cards on the right. Phone: the same blocks stacked, unchanged. */}
-      <div className="tablet:grid tablet:grid-cols-2 tablet:gap-x-4 tablet:items-start">
+          cards on the right as a 2×2 grid stretched to the same height, so the
+          columns share a top and bottom edge. Phone: the same blocks stacked. */}
+      <div className="tablet:grid tablet:grid-cols-2 tablet:gap-x-4 tablet:items-stretch">
       <div>
       {options.length > 0 && (
         <Card className="relative mt-4 px-4 py-4">
@@ -198,13 +201,13 @@ export function OptionsSummarySim({
       </div>
       </div>
 
-      <div>
+      <div className="tablet:mt-4 tablet:grid tablet:grid-rows-2 tablet:gap-2">
       {/* Per-strategy summary cards — tap to drill in */}
-      <div className="mt-3 grid grid-cols-2 gap-2 tablet:mt-4">
+      <div className="mt-3 grid grid-cols-2 gap-2 tablet:mt-0">
         <SideCard href="/options/csp" label="CSPs" count={csps.length} valueLabel="Premium received" {...cspC} on={on} accent="csp" />
         <SideCard href="/options/leap" label="LEAPs" count={leaps.length} {...leapC} on={on} accent="leap" />
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="mt-2 grid grid-cols-2 gap-2 tablet:mt-0">
         <SideCard href="/options/covered" label="Covered" count={covered.length} valueLabel="Premium received" {...covC} on={on} accent="covered" />
         <SideCard href="/options/spread" label="Spreads" count={spreads.length} valueLabel="Net value" {...sprC} on={on} accent="spread" />
       </div>
