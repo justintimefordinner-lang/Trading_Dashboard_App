@@ -28,6 +28,13 @@ export default async function ChartPage({ searchParams }: { searchParams: Promis
           right={<BackLink />}
         />
         <SecurityChart watchlist={watchlist} initialSymbol={initial} />
+        {/* The same chart is one long-press away from anywhere in the app — worth
+            saying here, where people come looking for a chart on purpose. */}
+        <p className="mt-4 px-1 text-[11px] leading-relaxed text-muted">
+          <span className="font-medium text-text">Quick charting:</span> hold any ticker for 1.8 seconds — in Holdings,
+          Options, P&amp;L, the Brief, anywhere it appears — and it opens here. A small{" "}
+          <span className="text-violet-300">hold to chart</span> pill shows once the press is deliberate; lift early to cancel.
+        </p>
       </ShowAmounts>
     </main>
   );
