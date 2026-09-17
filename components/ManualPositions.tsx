@@ -137,7 +137,9 @@ export function ManualPositions({ initial }: { initial: ManualAccount[] }) {
             <button onClick={() => createAccount(true)} disabled={busy || !newLabel.trim()} className={btnPrimary}>Create and import a spreadsheet</button>
             <button onClick={() => createAccount(false)} disabled={busy || !newLabel.trim()} className={btnQuiet}>Create, add positions by hand</button>
           </div>
-          <p className="text-[11px] text-muted">Name it first — the positions you add or import go into that account.</p>
+          <p className="text-[11px] text-muted">
+            {newLabel.trim() ? "The positions you add or import go into this account." : "Type a name to enable the buttons — the positions you add or import go into that account."}
+          </p>
         </div>
       )}
 
