@@ -4,6 +4,7 @@ import { BRIDGE_ENV_PATH } from "@/lib/bridge-dir";
 import { bridges } from "@/lib/bridges";
 import { readEnvFile } from "@/lib/env-file";
 import { getSimSkew } from "@/lib/sim-skew";
+import { readManualFile } from "@/lib/manual-positions";
 import { getSnapshot } from "@/lib/snapshot";
 import { getCombineIds, getSelectedAccountId, COMBINED_ID, accountLabel } from "@/lib/account";
 
@@ -35,6 +36,7 @@ export default async function SettingsPage() {
           }}
           initialSkew={getSimSkew()}
           bridges={bridgeList}
+          manual={readManualFile().accounts}
           accounts={accounts}
           combineIds={combineIds}
           combinedSelected={selectedId === COMBINED_ID}

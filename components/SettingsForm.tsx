@@ -7,6 +7,8 @@ import { useState, type ReactNode } from "react";
 import { setIvSkew } from "@/lib/simConfig";
 import { SchwabConnect } from "@/components/SchwabConnect";
 import { LayoutToggle } from "@/components/LayoutToggle";
+import { ManualPositions } from "@/components/ManualPositions";
+import type { ManualAccount } from "@/lib/manual-positions";
 import { CombineViews, type CombineAccountOption } from "@/components/CombineViews";
 
 function MenuItem({
@@ -217,10 +219,12 @@ export function SettingsForm({
   accounts = [],
   combineIds = [],
   combinedSelected = false,
+  manual = [],
 }: {
   initialIntervals: Intervals;
   initialSkew: number;
   bridges?: { id: string; label: string }[];
+  manual?: ManualAccount[];
   accounts?: CombineAccountOption[];
   combineIds?: string[];
   combinedSelected?: boolean;
@@ -253,6 +257,9 @@ export function SettingsForm({
       </MenuItem>
       <MenuItem title="Simulate skew" subtitle="After-hours what-if IV assumption">
         <SkewSection initialSkew={initialSkew} />
+      </MenuItem>
+      <MenuItem title="Manual positions" subtitle="Track positions held elsewhere, priced by Schwab">
+        <ManualPositions initial={manual} />
       </MenuItem>
       <MenuItem title="Layout" subtitle="Phone frame or the wide tablet canvas">
         <p className="mb-2 text-xs text-muted">
