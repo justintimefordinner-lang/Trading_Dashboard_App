@@ -22,6 +22,7 @@ import {
   convertRows,
   detectMapping,
   findHeaderRow,
+  normHeader,
   parseCsv,
   type Field,
   type ImportOptions,
@@ -294,8 +295,14 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
     const hi = findHeaderRow(all);
     const hdr = all[hi].map((h) => h.trim());
     // Data rows: everything after the header that has at least two filled cells
-    // (footers and disclaimers are one long cell on their own line).
-    const data = all.slice(hi + 1).filter((r) => r.filter((c) => c.trim() !== "").length >= 2);
+    // (footers and disclaimers are one long cell on their own line), minus any
+    // repeat of the header row — Schwab's all-accounts export restates it per
+    // account section.
+    const hdrKey = hdr.map(normHeader).join("|");
+    const data = all
+      .slice(hi + 1)
+      .filter((r) => r.filter((c) => c.trim() !== "").length >= 2)
+      .filter((r) => r.map((c) => normHeader(c.trim())).join("|") !== hdrKey);
     setFileName(file.name);
     setHeaders(hdr);
     setRows(data);

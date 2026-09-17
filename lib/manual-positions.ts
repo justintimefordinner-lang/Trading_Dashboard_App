@@ -36,6 +36,11 @@ export interface ManualOption {
 
 export type ManualPosition = ManualStock | ManualOption;
 
+// Omit distributed over the union: a plain Omit<ManualPosition, "id"> would keep
+// only the keys the two shapes share and lose avgCost / strike / premium.
+type DistributiveOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never;
+export type NewManualPosition = DistributiveOmit<ManualPosition, "id">;
+
 export interface ManualAccount {
   id: string; // "manual-<slug>", stable — it is the account id in the snapshot
   label: string;
@@ -102,7 +107,7 @@ export function deleteAccount(id: string): void {
 }
 
 /** Append rows to an account (or replace its rows). Rows get ids here. */
-export function addPositions(accountId: string, rows: Omit<ManualPosition, "id">[], replace = false): ManualAccount {
+export function addPositions(accountId: string, rows: NewManualPosition[], replace = false): ManualAccount {
   const doc = readManualFile();
   const acct = doc.accounts.find((a) => a.id === accountId);
   if (!acct) throw new Error("Unknown manual account.");
@@ -127,12 +132,12 @@ const SYM = /^[A-Z][A-Z0-9.\-]{0,9}$/;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Validate one incoming row; returns the clean row or an error message. */
-export function validatePosition(raw: Record<string, unknown>): { row?: Omit<ManualPosition, "id">; error?: string } {
+export function validatePosition(raw: Record<string, unknown>): { row?: NewManualPosition; error?: string } {
   const symbol = String(raw.symbol ?? "").trim().toUpperCase();
   if (!SYM.test(symbol)) return { error: `"${symbol || "?"}" is not a valid symbol.` };
   const qty = Number(raw.qty);
   if (!Number.isFinite(qty) || qty <= 0) return { error: `${symbol}: quantity must be greater than 0.` };
-  const openedAt = raw.openedAt && ISO.test(String(raw.openedAt)) ? String(raw.openedAt) : undefined;
+  const openedAt = typeof raw.openedAt === "string" && ISO.test(raw.openedAt) ? raw.openedAt : undefined;
 
   if (raw.type === "stock") {
     const avgCost = Number(raw.avgCost);

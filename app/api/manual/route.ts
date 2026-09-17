@@ -9,7 +9,7 @@ import {
   readManualFile,
   upsertAccount,
   validatePosition,
-  type ManualPosition,
+  type NewManualPosition,
 } from "@/lib/manual-positions";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       const raw = Array.isArray(b.rows) ? (b.rows as Record<string, unknown>[]) : [];
       if (raw.length === 0) return Response.json({ ok: false, error: "Nothing to add." }, { status: 400 });
       if (raw.length > 500) return Response.json({ ok: false, error: "That's more than 500 rows — split the file." }, { status: 400 });
-      const rows: Omit<ManualPosition, "id">[] = [];
+      const rows: NewManualPosition[] = [];
       const errors: string[] = [];
       for (const r of raw) {
         const v = validatePosition(r);

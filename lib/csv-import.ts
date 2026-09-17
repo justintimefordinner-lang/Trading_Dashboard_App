@@ -281,24 +281,34 @@ export function detectMapping(headers: string[], sample: string[][]): Mapping {
           if (vals.length && vals.some((v) => parseAssetType(v))) claim("assetType", i);
           continue;
         }
-        // "price" alone is often the CURRENT price; only take it as entry when the
-        // file offers nothing better.
-        if (f === "entry" && norm[i] === "price" && norm.some((h, j) => j !== i && SYNONYMS.entry.includes(h) && h !== "price")) continue;
+        // A bare "Price" column is the CURRENT price in every broker export seen
+        // (Schwab, Fidelity); it is only taken as the entry price as a last resort below.
+        if (f === "entry" && norm[i] === "price") continue;
         claim(f, i);
       }
     }
   }
-  // Fuzzy pass: header CONTAINS a synonym (e.g. "Quantity (Shares)", "Avg Cost/Share").
+  // Fuzzy pass: header CONTAINS a synonym (e.g. "Qty (Quantity)", "Avg Cost/Share").
+  // For the entry price only cost-flavoured synonyms count here, so "Price Chng $"
+  // or "Last Price" can never be mistaken for what was paid.
+  const FUZZY_ENTRY = SYNONYMS.entry.filter((s) => /cost|paid|premium|entry|avg|average|purchase|fill|open|trade/.test(s));
   for (const f of order) {
     if (map[f] != null) continue;
     for (let i = 0; i < norm.length; i++) {
       if (taken.has(i) || !norm[i]) continue;
-      if (SYNONYMS[f].some((s) => s.length >= 4 && norm[i].includes(s))) {
-        if (f === "entry" && /current|market|last|mark/.test(norm[i])) continue;
+      const pool = f === "entry" ? FUZZY_ENTRY : SYNONYMS[f];
+      if (pool.some((s) => s.length >= 4 && norm[i].includes(s))) {
+        if (/chng|change|gain|loss|pct|percent|current|market|last|mark|today/.test(norm[i]) && f !== "openedAt") continue;
         claim(f, i);
         break;
       }
     }
+  }
+  // Last resort: a bare "Price" column stands in for the entry price only when the
+  // file has neither a per-share cost nor a total cost basis to derive it from.
+  if (map.entry == null && map.costTotal == null) {
+    const i = norm.findIndex((h, j) => h === "price" && !taken.has(j));
+    if (i >= 0) claim("entry", i);
   }
   // A symbol column whose values are whole contracts doubles as the description.
   if (map.symbol != null && map.description == null) {
@@ -371,9 +381,11 @@ export function convertRows(rows: string[][], map: Mapping, opts: ImportOptions,
     const symCell = get(r, "symbol");
     const descCell = get(r, "description");
     // Broker housekeeping lines, not positions: Fidelity's core money-market
-    // position (symbol ends in **, no quantity), pending activity, sweep cash.
+    // position (symbol ends in **, no quantity), Schwab's "Cash & Cash
+    // Investments" and "Positions Total" lines, pending activity, sweep cash.
     if (/\*\*$/.test(symCell) || /money market|core position|pending activity|sweep/i.test(descCell)) return;
     const contract = parseContract(symCell) ?? parseContract(descCell);
+    if (!contract && /[\s&]/.test(symCell) && /total|cash|pending|sweep|money market|balance/i.test(symCell)) return;
     const symbol = (contract?.symbol ?? symCell.split(/\s+/)[0] ?? "").replace(/[^A-Za-z0-9.\-]/g, "").toUpperCase();
     if (!symbol) {
       if (map.symbol == null) missing.add("symbol");
