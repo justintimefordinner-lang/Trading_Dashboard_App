@@ -111,18 +111,23 @@ export function ManualPositions({ initial }: { initial: ManualAccount[] }) {
         account everywhere positions do.
       </p>
 
-      {/* Account picker */}
-      <div>
-        <label className={labelClass} htmlFor="manual-account">Account</label>
-        <select id="manual-account" value={selected} onChange={(e) => setSelected(e.target.value)} className={inputClass}>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.label} · {a.positions.length} {a.positions.length === 1 ? "position" : "positions"}
-            </option>
-          ))}
-          <option value="new">＋ New manual account…</option>
-        </select>
-      </div>
+      {/* Account picker — only once there is something to pick between. With no
+          accounts yet the only entry would be "New…", a dropdown that goes nowhere. */}
+      {accounts.length > 0 ? (
+        <div>
+          <label className={labelClass} htmlFor="manual-account">Account</label>
+          <select id="manual-account" value={selected} onChange={(e) => setSelected(e.target.value)} className={inputClass}>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label} · {a.positions.length} {a.positions.length === 1 ? "position" : "positions"}
+              </option>
+            ))}
+            <option value="new">＋ New manual account…</option>
+          </select>
+        </div>
+      ) : (
+        <div className={labelClass}>New manual account</div>
+      )}
 
       {selected === "new" && (
         <div className="space-y-2">
