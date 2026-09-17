@@ -200,7 +200,8 @@ function CashField({ value, onSave }: { value: number; onSave: (n: number) => vo
 }
 
 // ---- single-row form ---------------------------------------------------------
-const blank = { type: "option" as "stock" | "option", symbol: "", qty: "", avgCost: "", optionType: "put" as "put" | "call", side: "short" as "long" | "short", strike: "", expiration: "", premium: "", openedAt: "" };
+// All strings, so one setter covers every field; the API validates on submit.
+const blank = { type: "option", symbol: "", qty: "", avgCost: "", optionType: "put", side: "short", strike: "", expiration: "", premium: "", openedAt: "" };
 
 function AddForm({ accountId, onAdded }: { accountId: string; onAdded: (a: ManualAccount) => void }) {
   const [f, setF] = useState({ ...blank });
