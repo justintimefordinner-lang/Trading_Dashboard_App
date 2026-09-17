@@ -66,7 +66,7 @@ export function ManualPositions({ initial }: { initial: ManualAccount[] }) {
     router.refresh();
   };
 
-  async function createAccount() {
+  async function createAccount(thenImport = false) {
     setBusy(true);
     setErr("");
     const r = await post({ action: "account", label: newLabel, cash: Number(newCash || 0) });
@@ -75,7 +75,8 @@ export function ManualPositions({ initial }: { initial: ManualAccount[] }) {
     setNewLabel("");
     setNewCash("");
     sync(r.account);
-    setMsg(`Added ${r.account.label}.`);
+    setMsg(`Added ${r.account.label}.${thenImport ? "" : " Now add positions or import a spreadsheet."}`);
+    if (thenImport) setShowImport(true);
   }
 
   async function saveCash(cash: number) {
@@ -124,12 +125,14 @@ export function ManualPositions({ initial }: { initial: ManualAccount[] }) {
       </div>
 
       {selected === "new" && (
-        <div className="grid grid-cols-[1fr_auto] gap-2">
-          <div className="space-y-2">
-            <input id="manual-new-label" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Name, e.g. E*TRADE or Fidelity" className={inputClass} />
-            <input id="manual-new-cash" value={newCash} onChange={(e) => setNewCash(e.target.value)} placeholder="Cash in that account (optional)" inputMode="decimal" className={inputClass} />
+        <div className="space-y-2">
+          <input id="manual-new-label" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Name, e.g. Fidelity CSV or E*TRADE" className={inputClass} />
+          <input id="manual-new-cash" value={newCash} onChange={(e) => setNewCash(e.target.value)} placeholder="Cash in that account (optional)" inputMode="decimal" className={inputClass} />
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => createAccount(true)} disabled={busy || !newLabel.trim()} className={btnPrimary}>Create and import a spreadsheet</button>
+            <button onClick={() => createAccount(false)} disabled={busy || !newLabel.trim()} className={btnQuiet}>Create, add positions by hand</button>
           </div>
-          <button onClick={createAccount} disabled={busy || !newLabel.trim()} className={`${btnPrimary} self-end`}>Create</button>
+          <p className="text-[11px] text-muted">Name it first — the positions you add or import go into that account.</p>
         </div>
       )}
 
