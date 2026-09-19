@@ -140,7 +140,7 @@ function groupOf(group: string): AmVrpGroup {
 // "gainer" is never a stock that fell.
 const GATED: Record<string, string> = { CCL: "Travel", AA: "Materials", HL: "Miners" };
 const moverPool: AmMover[] = [
-  ...board.map((r) => ({ sym: r.sym, move: r.move, last: r.last, vrp: r.vrp, uptrend: r.trend.uptrend, gated: false, group: r.group })),
+  ...board.map((r) => ({ sym: r.sym, move: r.move ?? 0, last: r.last ?? null, vrp: r.vrp, uptrend: r.trend.uptrend, gated: false, group: r.group })),
   ...Object.entries(GATED).map(([sym, group]) => ({ sym, move: dayMovePct(sym), last: lastClose(sym), vrp: "thin" as Vrp, uptrend: false, gated: true, group })),
 ];
 const movers: { gainers: AmMover[]; losers: AmMover[] } = {
