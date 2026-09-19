@@ -1,4 +1,5 @@
-// Example-mode Morning Brief (AmReport). Mirrors what am_report.py produces so
+// Example-mode Morning Brief (AmReport). Mirrors what am_report.py produces, from
+// the real close in lib/example-market.ts (prices, moves, regime, earnings), so
 // the Briefing tab and the home CSP-board flags fully populate in a demo. Board
 // names are drawn from the approved universe and deliberately overlap the example
 // holdings (SOFI/INTC/MU are held & underweight → overlap green) while others
@@ -15,6 +16,7 @@ import type {
   Vrp,
   Tier,
 } from "./am-report-types";
+import { EXAMPLE_EARNINGS, EXAMPLE_MARKET as M, dayMovePct, daysToEarnings, lastClose } from "./example-market";
 
 // Dates derive from today so the board never reads as stale — expirations stay in
 // the future and the days-to-expiry on every ladder rung stays sensible.
@@ -105,15 +107,24 @@ function mkRow(sym: string, last: number, score: number, tier: Tier, vrp: Vrp, o
   };
 }
 
+// Prices, the day's move and earnings timing are real (lib/example-market.ts).
+// The trend score, tier and VRP label are the screen's judgement calls and stay
+// hand-set; they are chosen to agree with where each name actually sits.
+function row(sym: string, score: number, tier: Tier, vrp: Vrp, o: Omit<RowOpts, "move" | "er">): AmBoardRow {
+  const days = daysToEarnings(sym);
+  const er = days != null && days <= 45 ? { date: EXAMPLE_EARNINGS[sym], days, spans: days <= 30 } : undefined;
+  return mkRow(sym, lastClose(sym), score, tier, vrp, { ...o, move: dayMovePct(sym), er });
+}
+
 const board: AmBoardRow[] = [
-  mkRow("NVDA", 214.72, 88, "S", "rich", { group: "AI / Semis", beta: 1.7, ivr: 58, relVol: 1.4, move: 1.7 }),
-  mkRow("AVGO", 368.45, 84, "S", "rich", { group: "AI / Semis", beta: 1.4, ivr: 52, relVol: 1.2, move: 0.9 }),
-  mkRow("TSM", 418.95, 82, "A", "fair", { group: "AI / Semis", beta: 1.1, ivr: 41, relVol: 1.0, move: 2.2, er: { date: isoDay(29), days: 29, spans: true } }),
-  mkRow("MU", 966.78, 76, "A", "rich", { group: "Memory", beta: 1.5, ivr: 61, relVol: 1.6, move: 1.85 }),
-  mkRow("LRCX", 314.0, 81, "A", "fair", { group: "Semi Equip", beta: 1.3, ivr: 47, relVol: 1.1, move: 0.6 }),
-  mkRow("SOFI", 18.91, 71, "A", "rich", { group: "Fintech", beta: 1.6, ivr: 55, relVol: 1.3, move: 2.1 }),
-  mkRow("INTC", 90.07, 58, "B", "fair", { group: "Semis", beta: 1.0, ivr: 38, relVol: 0.9, move: -1.4 }),
-  mkRow("GLW", 149.84, 63, "B", "fair", { group: "Optical", beta: 1.1, ivr: 44, relVol: 1.0, move: 0.4 }),
+  row("NVDA", 88, "S", "rich", { group: "AI / Semis", beta: 1.7, ivr: 58, relVol: 1.4 }),
+  row("AVGO", 84, "S", "rich", { group: "AI / Semis", beta: 1.4, ivr: 52, relVol: 1.2 }),
+  row("TSM", 82, "A", "fair", { group: "AI / Semis", beta: 1.1, ivr: 41, relVol: 1.0 }),
+  row("MU", 76, "A", "rich", { group: "Memory", beta: 1.5, ivr: 61, relVol: 1.6 }),
+  row("LRCX", 81, "A", "fair", { group: "Semi Equip", beta: 1.3, ivr: 47, relVol: 1.1 }),
+  row("SOFI", 71, "A", "rich", { group: "Fintech", beta: 1.6, ivr: 55, relVol: 1.3 }),
+  row("INTC", 58, "B", "fair", { group: "Semis", beta: 1.0, ivr: 38, relVol: 0.9 }),
+  row("GLW", 63, "B", "fair", { group: "Optical", beta: 1.1, ivr: 44, relVol: 1.0 }),
 ];
 
 function groupOf(group: string): AmVrpGroup {
@@ -125,17 +136,37 @@ function groupOf(group: string): AmVrpGroup {
   return { group, n: members.length, rich, fair, thin, richest, members };
 }
 
+// The day's actual biggest movers across the board plus the gated names, so a
+// "gainer" is never a stock that fell.
+const GATED: Record<string, string> = { CCL: "Travel", AA: "Materials", HL: "Miners" };
+const moverPool: AmMover[] = [
+  ...board.map((r) => ({ sym: r.sym, move: r.move, last: r.last, vrp: r.vrp, uptrend: r.trend.uptrend, gated: false, group: r.group })),
+  ...Object.entries(GATED).map(([sym, group]) => ({ sym, move: dayMovePct(sym), last: lastClose(sym), vrp: "thin" as Vrp, uptrend: false, gated: true, group })),
+];
 const movers: { gainers: AmMover[]; losers: AmMover[] } = {
-  gainers: [
-    { sym: "TSM", move: 0.71, last: 418.95, vrp: "fair", uptrend: true, gated: false, group: "AI / Semis" },
-    { sym: "SOFI", move: 5.52, last: 18.91, vrp: "rich", uptrend: true, gated: false, group: "Fintech" },
-    { sym: "MU", move: -0.77, last: 966.78, vrp: "rich", uptrend: true, gated: false, group: "Memory" },
-  ],
-  losers: [
-    { sym: "INTC", move: -2.24, last: 90.07, vrp: "fair", uptrend: false, gated: false, group: "Semis" },
-    { sym: "CCL", move: 1.42, last: 25.73, vrp: "thin", uptrend: false, gated: true, group: "Travel" },
-  ],
+  gainers: moverPool.filter((m) => m.move > 0).sort((a, b) => b.move - a.move).slice(0, 3),
+  losers: moverPool.filter((m) => m.move < 0).sort((a, b) => a.move - b.move).slice(0, 3),
 };
+
+// Regime exactly as am_report.py derives it: the VIX band, contango vs
+// backwardation from VIX against VIX3M, and "deploy" unless the curve is
+// inverted or VIX is 20+.
+const BANDS: [number, string, string][] = [
+  [12, "Extreme Greed", "40–50%"],
+  [15, "Greed", "30–40%"],
+  [20, "Slight Fear", "20–25%"],
+  [25, "Fear", "10–15%"],
+  [30, "Very Fearful", "5–10%"],
+  [Infinity, "Extreme Fear", "0–5%"],
+];
+const [, band, cashRange] = BANDS.find(([hi]) => M.vix < hi) ?? BANDS[BANDS.length - 1];
+const backwardation = M.vix > M.vix3m;
+
+// Earnings inside the next two weeks, from the real calendar.
+const landmines = Object.keys(EXAMPLE_EARNINGS)
+  .map((sym) => ({ sym, erDate: EXAMPLE_EARNINGS[sym], erDays: daysToEarnings(sym) }))
+  .filter((l): l is { sym: string; erDate: string; erDays: number } => l.erDays != null && l.erDays <= 14)
+  .sort((a, b) => a.erDays - b.erDays);
 
 export const exampleAmReport: AmReport = {
   meta: {
@@ -150,26 +181,23 @@ export const exampleAmReport: AmReport = {
     ladderCadence: "base",
   },
   regime: {
-    vix: 15.13,
-    vix3m: 18.5,
-    termStructure: "contango",
-    band: "Slight Fear",
-    cashRange: "20–25%",
-    volWeather: "deploy",
+    vix: M.vix,
+    vix3m: M.vix3m,
+    termStructure: backwardation ? "backwardation" : "contango",
+    band,
+    cashRange,
+    volWeather: backwardation || M.vix >= 20 ? "hold" : "deploy",
     futures: [
-      { sym: "ES", pct: 0.3 },
-      { sym: "NQ", pct: 0.52 },
+      { sym: "ES", pct: M.esPct },
+      { sym: "NQ", pct: M.nqPct },
     ],
-    s5fi: 58.1,
-    s5fiSlopeWk: -0.35,
+    s5fi: M.s5fi,
+    s5fiSlopeWk: M.s5fiSlopeWk,
   },
   board,
   movers,
   vrpGroups: [groupOf("AI / Semis"), groupOf("Memory"), groupOf("Semi Equip"), groupOf("Fintech"), groupOf("Semis"), groupOf("Optical")],
-  landmines: [
-    { sym: "AMAT", erDate: isoDay(5), erDays: 5 },
-    { sym: "ADI", erDate: isoDay(7), erDays: 7 },
-  ],
+  landmines,
   steerClear: [
     { sym: "CCL", fails: ["below 200DMA", "downtrend"] },
     { sym: "AA", fails: ["thin OI", "wide spreads"] },
