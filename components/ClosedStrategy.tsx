@@ -21,7 +21,7 @@ const chipFor = (outcome: string) =>
     : "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30";
 
 const chipText = (outcome: string) =>
-  outcome === "expired" ? "expired" : outcome === "closed_loss" ? "loss" : "closed";
+  outcome === "expired" ? "expired" : outcome === "assigned" ? "called away" : outcome === "closed_loss" ? "loss" : "closed";
 
 export function ClosedStrategy({
   kind,
@@ -276,7 +276,7 @@ function CoveredRows({ c }: { c: ClosedCoveredCall }) {
           </>
         }
       />
-      <Row k="Cost to close" v={c.outcome === "expired" ? "$0 (expired worthless)" : <Amt>{fmtMoney(c.costToClose, { cents: true })}</Amt>} />
+      <Row k="Cost to close" v={c.outcome === "expired" ? "$0 (expired worthless)" : c.outcome === "assigned" ? "$0 (called away — premium folded into the share sale)" : <Amt>{fmtMoney(c.costToClose, { cents: true })}</Amt>} />
       <Row
         k="Realized P/L"
         v={

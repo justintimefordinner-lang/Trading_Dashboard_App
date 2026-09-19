@@ -241,7 +241,7 @@ export interface ClosedCoveredCall {
   creditReceived: number; // $ collected at open
   costToClose: number; // $ to buy-to-close (0 if expired)
   realizedPnl: number;
-  outcome: "closed_profit" | "closed_loss" | "expired";
+  outcome: "closed_profit" | "closed_loss" | "expired" | "assigned"; // assigned = called away; premium folded into the shares' sale proceeds, no option gain booked
   daysHeld: number;
   returnOnNotional: number; // realizedPnl ÷ (strike × 100 × contracts), decimal
   annualized: number; // decimal
