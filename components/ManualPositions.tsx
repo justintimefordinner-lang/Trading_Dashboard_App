@@ -514,14 +514,14 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
                 </div>
                 {shortPutCollateral > 0 && (
                   <label className="flex flex-wrap items-center gap-2">
-                    <span className="text-muted">That cash figure</span>
+                    <span className="text-sm font-semibold text-text">That cash figure</span>
                     <select
                       id="import-cash-mode"
                       value={includes ? "includes" : "free"}
                       onChange={(e) => setCashIncludes(e.target.value === "includes")}
                       className={`${inputClass} w-auto py-1`}
                     >
-                      <option value="includes">includes the cash securing the puts</option>
+                      <option value="includes">includes the cash securing the puts (exclude collateralized cash)</option>
                       <option value="free">is free cash only</option>
                     </select>
                   </label>
