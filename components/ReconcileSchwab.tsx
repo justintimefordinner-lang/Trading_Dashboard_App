@@ -88,9 +88,37 @@ export function ReconcileSchwab({
               {!report && (
                 <div className="mt-4 space-y-3">
                   <p className="text-muted">
-                    On schwab.com: <span className="text-text">Accounts → History → Realized Gain/Loss</span>, pick the account and date range, choose{" "}
-                    <span className="text-text">Lot Details</span>, and export. Pick that CSV here. It is read in this browser and never uploaded; nothing about
-                    your P&amp;L changes.
+                    On schwab.com: <span className="text-text">Accounts → History → Realized Gain/Loss</span>, pick the account and date range, then{" "}
+                    <span className="text-text">Export</span>. Schwab asks what to export:
+                  </p>
+                  {/* The export dialog's two choices, drawn rather than screenshotted so it
+                      reads in this theme. Only the right-hand one has the individual lots. */}
+                  <div className="grid grid-cols-2 gap-2" aria-label="Choose Export Details Only in Schwab's export dialog">
+                    <div className="rounded-xl border border-border bg-surface p-3 opacity-60">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold">Export Summary Only</span>
+                        <span className="grid h-4 w-4 place-items-center rounded-full ring-1 ring-inset ring-border text-[10px] text-muted">✕</span>
+                      </div>
+                      <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px] text-muted">
+                        <li>No individual lots</li>
+                        <li>No opening dates</li>
+                      </ul>
+                      <div className="mt-2 text-[11px] font-medium text-rose-300">Not this one</div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/50 bg-emerald-500/10 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold">Export Details Only</span>
+                        <span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-400 text-[10px] font-bold text-[#0a0e14]">✓</span>
+                      </div>
+                      <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px] text-muted">
+                        <li>Includes individual lots</li>
+                        <li>Includes opening dates</li>
+                      </ul>
+                      <div className="mt-2 text-[11px] font-medium text-emerald-300">Choose this</div>
+                    </div>
+                  </div>
+                  <p className="text-muted">
+                    Then pick that CSV here. It is read in this browser and never uploaded; nothing about your P&amp;L changes.
                   </p>
                   <p className="text-muted">
                     Schwab&apos;s report is a tax document: it nets fees, folds an assigned option&apos;s premium into the shares, and disallows wash-sale losses.

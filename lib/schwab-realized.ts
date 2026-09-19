@@ -58,8 +58,14 @@ export function parseSchwabRealized(text: string): SchwabReport | { error: strin
   const iWash = col("washsale");
   const iDis = col("disallowedloss");
   const iTerm = col("term");
+  // The Summary export has one row per security and no lot columns. It can't be
+  // reconciled by month or used for cost bases, so say which export is needed.
+  const looksLikeSummary = /summary/i.test(title) || (iSym >= 0 && iGain >= 0 && iOpened < 0 && (iClosed < 0 || iQty < 0));
+  if (looksLikeSummary) {
+    return { error: "That's Schwab's Summary export. Export again and choose \"Export Details Only\" — it has the individual lots this needs." };
+  }
   if ([iSym, iClosed, iQty, iProceeds, iCost, iGain].some((i) => i < 0)) {
-    return { error: "Expected the Lot Details export: Symbol, Closed Date, Quantity, Proceeds, Cost Basis and Gain/Loss columns." };
+    return { error: "Expected Schwab's Details export: Symbol, Closed Date, Quantity, Proceeds, Cost Basis and Gain/Loss columns. In Schwab's export dialog choose \"Export Details Only\"." };
   }
 
   const lots: SchwabLot[] = [];
