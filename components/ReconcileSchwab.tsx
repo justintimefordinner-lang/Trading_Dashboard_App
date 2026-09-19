@@ -10,7 +10,7 @@ import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { parseSchwabRealized, type SchwabReport } from "@/lib/schwab-realized";
-import { proposeCostBasis, reconcile, type AppClosed, type UnresolvedSale } from "@/lib/reconcile";
+import { proposeCostBasis, reconcile, type AppClosed, type EnteredBasis, type UnresolvedSale } from "@/lib/reconcile";
 
 const money = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -21,10 +21,12 @@ export function ReconcileSchwab({
   records,
   accounts,
   unresolved,
+  entered = [],
 }: {
   records: AppClosed[];
   accounts: { id: string; label: string }[];
   unresolved: UnresolvedSale[];
+  entered?: EnteredBasis[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -34,15 +36,17 @@ export function ReconcileSchwab({
   const [err, setErr] = useState("");
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState<number | null>(null);
+  const [corrected, setCorrected] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const stamped = records.some((r) => r.accountId);
   const result = useMemo(() => (report ? reconcile(report, records, accountId || null) : null), [report, records, accountId]);
-  const basis = useMemo(() => (report ? proposeCostBasis(unresolved.filter((u) => u.costPerShare == null), report.lots) : null), [report, unresolved]);
+  const basis = useMemo(() => (report ? proposeCostBasis(unresolved.filter((u) => u.costPerShare == null), report.lots, entered) : null), [report, unresolved, entered]);
 
   async function onFile(file: File) {
     setErr("");
     setApplied(null);
+    setCorrected(null);
     const parsed = parseSchwabRealized(await file.text());
     if ("error" in parsed) return setErr(parsed.error);
     setFileName(file.name);
@@ -63,6 +67,24 @@ export function ReconcileSchwab({
     }
     setApplying(false);
     setApplied(ok);
+    router.refresh();
+  }
+
+  // Replace hand-entered cost bases with the cost of the lots Schwab actually sold.
+  async function applyCorrections() {
+    if (!basis) return;
+    setApplying(true);
+    let ok = 0;
+    for (const c of basis.corrections) {
+      const res = await fetch("/api/stocks/cost-basis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: c.id, costPerShare: c.costPerShare, acquiredDate: c.acquiredDate ?? "" }),
+      });
+      if (res.ok) ok += 1;
+    }
+    setApplying(false);
+    setCorrected(ok);
     router.refresh();
   }
 
@@ -184,6 +206,17 @@ export function ReconcileSchwab({
                       : `Off by ${(pctOff * 100).toFixed(1)}%. ${result.matchedSymbols} symbols agree; ${result.bySymbol.length} don't, listed below largest first.`}
                   </p>
 
+                  {/* What was set aside: Schwab lots from before the app's history begins */}
+                  {result.historyStart && result.beforeHistory.lots > 0 && (
+                    <p className="rounded-lg bg-surface px-3 py-2 text-muted ring-1 ring-inset ring-border">
+                      Compared from <span className="text-text">{result.historyStart}</span>, the earliest trade the app has. This report also holds{" "}
+                      {result.beforeHistory.lots.toLocaleString()} {result.beforeHistory.lots === 1 ? "lot" : "lots"} closed before then, worth{" "}
+                      <span className="text-text">{money(result.beforeHistory.gain)}</span> ({money(result.beforeHistory.options)} options, {money(result.beforeHistory.stock)} stock).
+                      Schwab&apos;s API doesn&apos;t reach back that far, so they are left out of every figure here rather than counted against the app.
+                      For a like-for-like check, export from {result.historyStart} onward.
+                    </p>
+                  )}
+
                   {/* Cost basis from the report */}
                   {basis && (basis.proposals.length > 0 || basis.unmatched.length > 0) && (
                     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
@@ -215,6 +248,40 @@ export function ReconcileSchwab({
                     </div>
                   )}
 
+                  {/* Cost bases typed in by hand that Schwab's lots disagree with */}
+                  {basis && (basis.corrections.length > 0 || corrected !== null) && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                      {basis.corrections.length > 0 ? (
+                        <>
+                          <div className="font-medium text-amber-200">
+                            {basis.corrections.length} cost {basis.corrections.length === 1 ? "basis you entered doesn't" : "bases you entered don't"} match Schwab&apos;s lots — worth{" "}
+                            {signed(basis.corrections.reduce((s, c) => s + c.delta, 0))} of realized P&amp;L
+                          </div>
+                          <p className="mt-1 text-[11px] text-muted">
+                            Schwab&apos;s figure is the cost of the specific shares it sold. When only part of a position is sold that is usually not the position&apos;s average cost, which is the easy number to type.
+                          </p>
+                          <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto tabular text-muted">
+                            {basis.corrections.map((c) => (
+                              <li key={c.id}>
+                                <span className="font-semibold text-text" data-ticker={c.symbol}>{c.symbol}</span> {c.shares} sh sold {c.closeDate} @ ${c.soldAt.toFixed(2)}: you entered ${c.enteredCost.toFixed(2)}, Schwab used{" "}
+                                <span className="text-text">${c.costPerShare.toFixed(2)}</span> · <span className={c.delta >= 0 ? "text-emerald-400" : "text-rose-400"}>{signed(c.delta)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="mt-2">
+                            <button onClick={applyCorrections} disabled={applying} className={btn}>
+                              {applying ? "Saving…" : `Use Schwab's cost for ${basis.corrections.length === 1 ? "this sale" : `these ${basis.corrections.length}`}`}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-emerald-300">
+                          Corrected {corrected} cost {corrected === 1 ? "basis" : "bases"}. The bridge re-books {corrected === 1 ? "it" : "them"} on its next rebuild, within a minute or two.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Differences by symbol */}
                   {result.bySymbol.length > 0 && (
                     <div>
@@ -222,7 +289,7 @@ export function ReconcileSchwab({
                       <p className="mb-2 text-[11px] text-muted">
                         {pctOff <= 0.005
                           ? "These are tax-versus-economic and rounding differences: wash sales, how an assigned option's premium is spread over the shares, fee allocation on multi-fill orders. Worth a look only if one grows."
-                          : "Work from the top. \"Needs a cost basis\" is fixed with the button above. \"Booked as expired\" or \"not in the app\" usually clears with Build history, which re-pulls a year of Schwab activity. Shares bought before that reach need \"Add a stock sale\". Wash-sale lines need nothing."}
+                          : "Work from the top. \"Needs a cost basis\", and a cost you typed that Schwab disagrees with, are fixed with the amber boxes above. \"Booked as expired\" or \"not in the app\" usually clears with Build history, which re-pulls a year of Schwab activity. Shares bought before that reach need \"Add a stock sale\". Wash-sale lines need nothing."}
                       </p>
                       <ul className="divide-y divide-border rounded-xl border border-border">
                         {result.bySymbol.slice(0, 40).map((d) => (

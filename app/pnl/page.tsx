@@ -15,7 +15,8 @@ import { ReconcileSchwab } from "@/components/ReconcileSchwab";
 import type { AppClosed } from "@/lib/reconcile";
 import { accountLabel } from "@/lib/account-shared";
 import { ManualStockEntry } from "@/components/ManualStockEntry";
-import { readUnresolvedStocks, readManualStockSales } from "@/lib/bridge-files";
+import { readUnresolvedStocks, readManualStockSales, readManualCostBases } from "@/lib/bridge-files";
+import { EnteredCostBases } from "@/components/EnteredCostBases";
 import type { OptionKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +52,7 @@ export default async function PnlPage() {
     { key: "covered", label: "Covered calls", items: coveredF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
     { key: "spread", label: "Spreads", items: spreadF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.shortStrike}/${r.longStrike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
     { key: "leap", label: "LEAPs", items: leapF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
-    { key: "stock", label: "Stocks", items: stockF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `${px(r.avgOpen)} → ${px(r.avgClose)}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
+    { key: "stock", label: "Stocks", items: stockF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `${px(r.avgOpen)} → ${px(r.avgClose)}${r.manualBasis && !r.manualEntry ? " · cost entered by hand" : ""}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
   ];
 
   // Open — current unrealized mark-to-market per bucket.
@@ -81,13 +82,18 @@ export default async function PnlPage() {
   const unresolved = readUnresolvedStocks();
   // Fully user-added sales that predate the data window entirely.
   const manualSales = readManualStockSales();
+  // Cost bases already on file, so a mistyped one can be reviewed and corrected.
+  const enteredBases = readManualCostBases();
   // Every closed round-trip, flattened for the Schwab reconcile (compares by symbol and month).
+  // Positions closed by hand in a manual account were held at another broker, so
+  // they have no place in a comparison with Schwab.
+  const atSchwab = (r: { id: string }) => !r.id.startsWith("manual:");
   const appClosed: AppClosed[] = [
-    ...cspF.closed.map((r) => ({ kind: "csp" as const, symbol: r.symbol, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
-    ...coveredF.closed.map((r) => ({ kind: "covered" as const, symbol: r.symbol, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
-    ...spreadF.closed.map((r) => ({ kind: "spread" as const, symbol: r.symbol, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
-    ...leapF.closed.map((r) => ({ kind: "leap" as const, symbol: r.symbol, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
-    ...stockF.closed.map((r) => ({ kind: "stock" as const, symbol: r.symbol, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
+    ...cspF.closed.filter(atSchwab).map((r) => ({ kind: "csp" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
+    ...coveredF.closed.filter(atSchwab).map((r) => ({ kind: "covered" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
+    ...spreadF.closed.filter(atSchwab).map((r) => ({ kind: "spread" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
+    ...leapF.closed.filter(atSchwab).map((r) => ({ kind: "leap" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
+    ...stockF.closed.filter(atSchwab).map((r) => ({ kind: "stock" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId, manual: !!(r.manualBasis || r.manualEntry) })),
   ];
   const reconcileAccounts = snap.accounts.map((a) => ({ id: a.id, label: `${accountLabel(a)} ${a.mask}` }));
 
@@ -99,7 +105,7 @@ export default async function PnlPage() {
           subtitle={`${account.nickname ?? account.mask} · realized and open by strategy`}
           right={
             <div className="flex items-center gap-2">
-              {hasHistory && <ReconcileSchwab records={appClosed} accounts={reconcileAccounts} unresolved={unresolved} />}
+              {hasHistory && <ReconcileSchwab records={appClosed} accounts={reconcileAccounts} unresolved={unresolved} entered={enteredBases} />}
               <CostBasisAlert unresolved={unresolved} />
               <BuildHistory hasHistory={hasHistory} />
             </div>
@@ -112,6 +118,7 @@ export default async function PnlPage() {
           </p>
         )}
         <ManualStockEntry sales={manualSales} />
+        <EnteredCostBases entries={enteredBases} />
         <PnlView realized={realized} open={open} />
       </ShowAmounts>
     </main>

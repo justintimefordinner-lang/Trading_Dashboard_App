@@ -1,9 +1,11 @@
 // Save a user-entered cost basis for a stock sale the bridge couldn't auto-cost
 // (the purchase predates the ~58-day transaction window). Merged into
 // manual_cost_basis.json in the app's own data/ folder; the bridge reads it on its
-// next rebuild and produces a proper closed-stock round-trip.
+// next rebuild and produces a proper closed-stock round-trip. POST also corrects an
+// entry already on file (same id); DELETE removes one, which sends the sale back to
+// the "needs a cost basis" list.
 import { demoBlocked } from "@/lib/demo";
-import { saveManualCostBasis } from "@/lib/bridge-files";
+import { deleteManualCostBasis, saveManualCostBasis } from "@/lib/bridge-files";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,24 @@ export async function POST(req: Request) {
     saveManualCostBasis(id, cps, acquired || null);
   } catch {
     return Response.json({ ok: false, error: "Could not save the cost basis." }, { status: 500 });
+  }
+  return Response.json({ ok: true });
+}
+
+export async function DELETE(req: Request) {
+  const blocked = demoBlocked();
+  if (blocked) return blocked;
+  let id = "";
+  try {
+    id = (((await req.json()) as Body).id || "").trim();
+  } catch {
+    id = "";
+  }
+  if (!id) return Response.json({ ok: false, error: "Missing sale id." }, { status: 400 });
+  try {
+    deleteManualCostBasis(id);
+  } catch {
+    return Response.json({ ok: false, error: "Could not remove the cost basis." }, { status: 500 });
   }
   return Response.json({ ok: true });
 }

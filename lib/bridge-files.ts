@@ -216,6 +216,60 @@ export function saveManualCostBasis(id: string, costPerShare: number, acquiredDa
   fs.writeFileSync(MANUAL_BASIS_PATH, JSON.stringify(cur, null, 2));
 }
 
+/** A cost basis the user entered, with the sale it belongs to. */
+export interface EnteredCostBasis {
+  id: string;
+  symbol: string;
+  shares: number;
+  soldAt: number;
+  closeDate: string;
+  costPerShare: number;
+  acquiredDate: string | null;
+}
+
+/** Every cost basis on file, so an entry can be reviewed and corrected after the
+ * sale has left the "needs a cost basis" list. The sale itself is read out of the
+ * id the bridge minted for it: "SYMBOL|closeDate|shares|price", with "#n" appended
+ * when two identical sales shared a day. Ids that don't parse are skipped. */
+export function readManualCostBases(): EnteredCostBasis[] {
+  let cur: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(MANUAL_BASIS_PATH, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+    cur = parsed as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  const out: EnteredCostBasis[] = [];
+  for (const [id, v] of Object.entries(cur)) {
+    const [symbol, closeDate, qty, price] = id.split("|");
+    const shares = Number(qty);
+    const soldAt = Number((price ?? "").split("#")[0]);
+    const entry = v && typeof v === "object" ? (v as { costPerShare?: unknown; acquiredDate?: unknown }) : { costPerShare: v };
+    const cps = typeof entry.costPerShare === "number" ? entry.costPerShare : NaN;
+    if (!symbol || !/^\d{4}-\d{2}-\d{2}$/.test(closeDate ?? "") || !(shares > 0) || !Number.isFinite(soldAt) || !Number.isFinite(cps)) continue;
+    const acq = typeof entry.acquiredDate === "string" && entry.acquiredDate ? entry.acquiredDate : null;
+    out.push({ id, symbol, shares, soldAt, closeDate, costPerShare: cps, acquiredDate: acq });
+  }
+  return out.sort((a, b) => b.closeDate.localeCompare(a.closeDate) || a.symbol.localeCompare(b.symbol));
+}
+
+/** Remove an entered cost basis. The sale goes back to "needs a cost basis" on
+ * the bridge's next rebuild. */
+export function deleteManualCostBasis(id: string): void {
+  let cur: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(MANUAL_BASIS_PATH, "utf8"));
+    if (!parsed || typeof parsed !== "object") return;
+    cur = parsed as Record<string, unknown>;
+  } catch {
+    return;
+  }
+  if (!(id in cur)) return;
+  delete cur[id];
+  fs.writeFileSync(MANUAL_BASIS_PATH, JSON.stringify(cur, null, 2));
+}
+
 // ── Fully user-added closed stock sales (predate the feed entirely, so they never
 //    surface as orphans). Stored as a list the bridge reads on rebuild. ──
 export interface ManualStockSale {

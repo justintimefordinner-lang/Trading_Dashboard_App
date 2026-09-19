@@ -3,7 +3,8 @@
 // P&L "Cost basis" card. Some stock sales were opened before the app's transaction
 // history, so the bridge can't compute the gain (no cost basis) or the holding
 // period (no acquired date, so it can't tell short- vs long-term). It surfaces them
-// here; the user supplies a blended $/share (from Schwab) and, to classify the sale
+// here; the user supplies what the SOLD lots cost per share (Schwab's Cost Basis ÷
+// Quantity for that sale, not the position's average cost) and, to classify the sale
 // short vs long-term, the acquired date. Both are stored write-only into the app's
 // own data/, and the bridge turns the sale into a real closed-stock round-trip on
 // its next rebuild. A row that already has a cost but no date reappears here with
@@ -66,9 +67,15 @@ export function StockCostBasis({ unresolved }: { unresolved: UnresolvedStock[] }
       <p className="text-sm font-semibold">Cost basis &amp; holding period</p>
       <p className="mt-1 text-xs text-muted">
         {rows.length} stock {rows.length === 1 ? "sale was" : "sales were"} opened before your data history.
-        Enter the blended cost per share (from Schwab) so it counts in your P&amp;L, and the date you acquired
-        the shares so it&apos;s classified short- vs long-term. The date is what puts long-held sales in your
-        long-term gains.
+        Enter what <span className="text-text">the shares that were sold</span> cost, per share, so it counts in your
+        P&amp;L, and the date you acquired them so it&apos;s classified short- vs long-term.
+      </p>
+      <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-100/90">
+        Use Schwab&apos;s number for this sale, not your average cost. On schwab.com: Accounts → History → Realized
+        Gain/Loss, find the sale, and divide its <span className="font-semibold">Cost Basis</span> by its{" "}
+        <span className="font-semibold">Quantity</span>. Schwab sells specific tax lots (often the cheapest first),
+        so when you sell only part of a position that figure can sit well away from the average cost shown on your
+        positions page. Reconcile can fill these in for you from a Schwab export.
       </p>
       <div className="mt-3 space-y-2.5">
         {rows.map((u) => {
@@ -123,7 +130,8 @@ export function StockCostBasis({ unresolved }: { unresolved: UnresolvedStock[] }
         })}
       </div>
       <p className="mt-2 text-[10px] leading-snug text-muted/70">
-        Applies on the next data refresh (~1 min). Stored — you only enter it once.
+        Applies on the next data refresh (~1 min). Stored — you only enter it once, and can correct it later under
+        &ldquo;Cost bases you entered&rdquo; on this page.
       </p>
     </Card>
   );
