@@ -16,7 +16,7 @@
 
 export type Field =
   | "symbol" | "description" | "quantity" | "entry" | "costTotal"
-  | "optionType" | "side" | "strike" | "expiration" | "assetType" | "openedAt";
+  | "optionType" | "side" | "strike" | "expiration" | "assetType" | "openedAt" | "marketValue";
 
 export const FIELD_LABEL: Record<Field, string> = {
   symbol: "Symbol",
@@ -30,6 +30,7 @@ export const FIELD_LABEL: Record<Field, string> = {
   expiration: "Expiration",
   assetType: "Asset type",
   openedAt: "Opened date",
+  marketValue: "Market value",
 };
 
 // What each field means to a user, shown in the "columns we need" intro.
@@ -45,6 +46,7 @@ export const FIELD_HELP: Record<Field, string> = {
   expiration: "expiration date, if the symbol doesn't say",
   assetType: "stock / option, if the file mixes both and the symbol doesn't say",
   openedAt: "the date the position was opened, for days-in-trade",
+  marketValue: "the row's current value; only used to read the balance off the file's cash row",
 };
 
 // Header synonyms, matched after normalising (lowercase, letters and digits only).
@@ -59,7 +61,8 @@ const SYNONYMS: Record<Field, string[]> = {
   strike: ["strike", "strikeprice", "strk", "exerciseprice"],
   expiration: ["exp", "expiry", "expiration", "expirationdate", "expdate", "expires", "expirydate", "maturity", "maturitydate", "expiredate"],
   assetType: ["assettype", "securitytype", "instrumenttype", "assetclass", "producttype", "sectype", "type", "category"],
-  openedAt: ["opened", "openedat", "opendate", "openeddate", "dateopened", "acquired", "acquireddate", "dateacquired", "purchasedate", "purchasedate", "tradedate", "entrydate", "date"],
+  openedAt: ["opened", "openedat", "opendate", "openeddate", "dateopened", "acquired", "acquireddate", "dateacquired", "purchasedate", "tradedate", "entrydate", "date"],
+  marketValue: ["marketvalue", "mktval", "mktvalue", "marketval", "currentvalue", "value", "positionvalue", "currentmarketvalue", "liquidationvalue", "balance"],
 };
 
 export const REQUIRED_STOCK: Field[] = ["symbol", "quantity", "entry"];
@@ -266,7 +269,7 @@ export function detectMapping(headers: string[], sample: string[][]): Mapping {
   const norm = headers.map(normHeader);
 
   // Exact synonym hits, most specific fields first so "Type" lands last.
-  const order: Field[] = ["strike", "expiration", "optionType", "side", "quantity", "openedAt", "symbol", "description", "costTotal", "entry", "assetType"];
+  const order: Field[] = ["strike", "expiration", "optionType", "side", "quantity", "openedAt", "symbol", "description", "costTotal", "marketValue", "entry", "assetType"];
   for (const f of order) {
     for (let i = 0; i < norm.length; i++) {
       if (taken.has(i) || !norm[i]) continue;
@@ -298,7 +301,8 @@ export function detectMapping(headers: string[], sample: string[][]): Mapping {
       if (taken.has(i) || !norm[i]) continue;
       const pool = f === "entry" ? FUZZY_ENTRY : SYNONYMS[f];
       if (pool.some((s) => s.length >= 4 && norm[i].includes(s))) {
-        if (/chng|change|gain|loss|pct|percent|current|market|last|mark|today/.test(norm[i]) && f !== "openedAt") continue;
+        if (/chng|change|gain|loss|pct|percent|current|market|last|mark|today/.test(norm[i]) && f !== "openedAt" && f !== "marketValue") continue;
+        if (f === "marketValue" && /chng|change|gain|loss|pct|percent/.test(norm[i])) continue;
         claim(f, i);
         break;
       }
@@ -366,6 +370,11 @@ export interface ImportResult {
   rows: ImportedRow[];
   // Fields that were needed by at least one row and weren't available.
   missing: Field[];
+  // Cash read off the file's cash row(s) — Schwab's "Cash & Cash Investments",
+  // Fidelity's core money-market position — via the market-value column. Null
+  // when the file has no such row or no value column to read it from.
+  cash: number | null;
+  cashRows: number;
 }
 
 /** Convert data rows with a mapping. Rows that can't be completed carry an
@@ -373,6 +382,8 @@ export interface ImportResult {
 export function convertRows(rows: string[][], map: Mapping, opts: ImportOptions, firstLine = 2): ImportResult {
   const out: ImportedRow[] = [];
   const missing = new Set<Field>();
+  let cash = 0;
+  let cashRows = 0;
   const get = (r: string[], f: Field) => (map[f] != null ? (r[map[f] as number] ?? "").trim() : "");
 
   rows.forEach((r, idx) => {
@@ -380,12 +391,25 @@ export function convertRows(rows: string[][], map: Mapping, opts: ImportOptions,
     if (r.every((c) => c.trim() === "")) return;
     const symCell = get(r, "symbol");
     const descCell = get(r, "description");
-    // Broker housekeeping lines, not positions: Fidelity's core money-market
-    // position (symbol ends in **, no quantity), Schwab's "Cash & Cash
-    // Investments" and "Positions Total" lines, pending activity, sweep cash.
-    if (/\*\*$/.test(symCell) || /money market|core position|pending activity|sweep/i.test(descCell)) return;
     const contract = parseContract(symCell) ?? parseContract(descCell);
-    if (!contract && /[\s&]/.test(symCell) && /total|cash|pending|sweep|money market|balance/i.test(symCell)) return;
+    // The cash row is a balance, not a position: Fidelity's core money-market
+    // position (symbol ends in **), Schwab's "Cash & Cash Investments", a sweep
+    // fund. Its market value becomes the account's cash.
+    const cashLike =
+      /\*\*$/.test(symCell) ||
+      /money market|core position|sweep/i.test(descCell) ||
+      (!contract && /[\s&]/.test(symCell) && /cash|money market|sweep/i.test(symCell) && !/total/i.test(symCell));
+    if (cashLike) {
+      const mv = parseNumber(get(r, "marketValue"));
+      if (mv != null) {
+        cash += mv;
+        cashRows += 1;
+      }
+      return;
+    }
+    // Other housekeeping lines: totals, pending activity, balances.
+    if (!contract && /[\s&]/.test(symCell) && /total|pending|balance/i.test(symCell)) return;
+    if (/pending activity/i.test(descCell)) return;
     const symbol = (contract?.symbol ?? symCell.split(/\s+/)[0] ?? "").replace(/[^A-Za-z0-9.\-]/g, "").toUpperCase();
     if (!symbol) {
       if (map.symbol == null) missing.add("symbol");
@@ -462,7 +486,7 @@ export function convertRows(rows: string[][], map: Mapping, opts: ImportOptions,
     out.push({ line, position: { type: "option", symbol, qty, optionType, side, strike, expiration, premium: entry, openedAt } });
   });
 
-  return { rows: out, missing: [...missing] };
+  return { rows: out, missing: [...missing], cash: cashRows > 0 ? Math.round(cash * 100) / 100 : null, cashRows };
 }
 
 /** The template users can download: our own column names, one stock and one option row. */

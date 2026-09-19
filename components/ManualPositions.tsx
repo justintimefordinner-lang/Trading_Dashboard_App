@@ -285,6 +285,7 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
   const [firstLine, setFirstLine] = useState(2);
   const [opts, setOpts] = useState<ImportOptions>({ defaultOptionSide: "short" });
   const [replace, setReplace] = useState(false);
+  const [useCash, setUseCash] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -324,7 +325,13 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
   async function doImport() {
     setBusy(true);
     setErr("");
-    const r = await post({ action: "import", accountId: account.id, replace, rows: good.map((g) => g.position) });
+    const r = await post({
+      action: "import",
+      accountId: account.id,
+      replace,
+      rows: good.map((g) => g.position),
+      cash: useCash && result?.cash != null ? result.cash : undefined,
+    });
     setBusy(false);
     if (!r.ok || !r.account) return setErr(r.error ?? "Import failed.");
     onImported(r.account, r.added ?? good.length);
@@ -369,7 +376,8 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
               <p className="mt-2 text-muted">
                 Optional: <span className="text-text">{FIELD_LABEL.openedAt}</span> for days in trade, and{" "}
                 <span className="text-text">{FIELD_LABEL.costTotal}</span> if the file has a total instead of a per-share price.
-                A negative quantity, or a Side column, marks a sold option.
+                A negative quantity, or a Side column, marks a sold option. A cash row (Schwab&apos;s &ldquo;Cash &amp; Cash
+                Investments&rdquo;, Fidelity&apos;s core position) sets the account&apos;s cash from its value column.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -479,6 +487,21 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
                 );
               })}
             </ul>
+            {result?.cash != null && (
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={useCash} onChange={(e) => setUseCash(e.target.checked)} />
+                <span>
+                  Set {account.label}&apos;s cash to <span className="font-semibold text-text">{money(result.cash)}</span>, read from the
+                  file&apos;s cash row. Cash is what makes the account total right — short options alone read as a liability.
+                </span>
+              </label>
+            )}
+            {result?.cash == null && account.cash === 0 && (
+              <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-amber-200">
+                No cash row was found in this file and the account&apos;s cash is $0. If it holds cash-secured puts, set its cash
+                afterwards (the Cash button) or the account total will show as a negative number.
+              </p>
+            )}
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
               <span>Replace the {account.positions.length} positions already in {account.label} (a fresh export), rather than adding to them</span>

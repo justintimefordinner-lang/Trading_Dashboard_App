@@ -100,6 +100,17 @@ export function upsertAccount(input: { id?: string; label: string; cash: number 
   return acct;
 }
 
+/** Set an account's cash balance (from a form edit or an import's cash row). */
+export function setAccountCash(id: string, cash: number): ManualAccount | null {
+  const doc = readManualFile();
+  const acct = doc.accounts.find((a) => a.id === id);
+  if (!acct) return null;
+  acct.cash = cash;
+  acct.updatedAt = new Date().toISOString();
+  writeManualFile(doc);
+  return acct;
+}
+
 export function deleteAccount(id: string): void {
   const doc = readManualFile();
   doc.accounts = doc.accounts.filter((a) => a.id !== id);

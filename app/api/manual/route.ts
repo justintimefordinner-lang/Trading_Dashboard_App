@@ -7,6 +7,7 @@ import {
   deleteAccount,
   deletePosition,
   readManualFile,
+  setAccountCash,
   upsertAccount,
   validatePosition,
   type NewManualPosition,
@@ -54,7 +55,11 @@ export async function POST(req: Request) {
         else if (v.error) errors.push(v.error);
       }
       if (rows.length === 0) return Response.json({ ok: false, error: errors[0] ?? "No valid rows." }, { status: 400 });
-      const acct = addPositions(accountId, rows, action === "import" && b.replace === true);
+      let acct = addPositions(accountId, rows, action === "import" && b.replace === true);
+      // An import can carry the balance read off the file's cash row.
+      if (action === "import" && typeof b.cash === "number" && Number.isFinite(b.cash) && b.cash >= 0) {
+        acct = setAccountCash(accountId, b.cash) ?? acct;
+      }
       return Response.json({ ok: true, added: rows.length, skipped: errors, account: acct });
     }
     if (action === "delete") {
