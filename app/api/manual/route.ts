@@ -4,6 +4,7 @@
 import { demoBlocked } from "@/lib/demo";
 import {
   addPositions,
+  closePosition,
   deleteAccount,
   deletePosition,
   readManualFile,
@@ -65,6 +66,25 @@ export async function POST(req: Request) {
     if (action === "delete") {
       deletePosition(String(b.accountId ?? ""), String(b.id ?? ""));
       return Response.json({ ok: true });
+    }
+    if (action === "close") {
+      const closePrice = Number(b.closePrice ?? 0);
+      const closedAt = String(b.closedAt ?? "");
+      if (!Number.isFinite(closePrice) || closePrice < 0) return Response.json({ ok: false, error: "Close price must be a number ≥ 0." }, { status: 400 });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(closedAt)) return Response.json({ ok: false, error: "Enter the close date." }, { status: 400 });
+      const fees = b.fees == null || b.fees === "" ? undefined : Number(b.fees);
+      if (fees != null && (!Number.isFinite(fees) || fees < 0)) return Response.json({ ok: false, error: "Fees must be a number ≥ 0." }, { status: 400 });
+      const result = closePosition(String(b.accountId ?? ""), String(b.id ?? ""), {
+        closePrice,
+        closedAt,
+        fees,
+        expired: b.expired === true,
+        assigned: b.assigned === true,
+        shares: b.shares == null || b.shares === "" ? undefined : Number(b.shares),
+        netClosePerShare: b.netClosePerShare == null || b.netClosePerShare === "" ? undefined : Number(b.netClosePerShare),
+        closeSpreadTogether: b.closeSpreadTogether === true,
+      });
+      return Response.json({ ok: true, account: result.account, booked: result.booked });
     }
     return Response.json({ ok: false, error: "Unknown action." }, { status: 400 });
   } catch (e) {

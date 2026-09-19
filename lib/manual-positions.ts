@@ -9,6 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR } from "@/lib/data-dirs";
+import * as closed from "@/lib/manual-closed";
 
 export const MANUAL_PATH = path.join(DATA_DIR, "manual_positions.json");
 
@@ -136,6 +137,98 @@ export function deletePosition(accountId: string, positionId: string): void {
   acct.positions = acct.positions.filter((p) => p.id !== positionId);
   acct.updatedAt = new Date().toISOString();
   writeManualFile(doc);
+}
+
+// ---- closing ------------------------------------------------------------------
+export interface ClosePositionInput {
+  closePrice: number; // per share; 0 for expired worthless
+  closedAt: string; // YYYY-MM-DD
+  fees?: number;
+  expired?: boolean;
+  assigned?: boolean; // short put assigned / covered call called away
+  shares?: number; // stock only: how many sold (default all)
+  netClosePerShare?: number; // spread only: net debit(+)/credit(−) to close both legs
+  closeSpreadTogether?: boolean; // spread leg: close its partner leg too
+}
+
+export interface CloseResult {
+  account: ManualAccount;
+  booked: string; // human summary of what was recorded
+}
+
+/** Close one manual position: book the realized round-trip into the manual
+ *  account's closed files and take the open row (or shares) off the account.
+ *  Follows the bridge's conventions — see lib/manual-closed.ts. */
+export function closePosition(accountId: string, positionId: string, input: ClosePositionInput): CloseResult {
+  const doc = readManualFile();
+  const acct = doc.accounts.find((a) => a.id === accountId);
+  if (!acct) throw new Error("Unknown manual account.");
+  const pos = acct.positions.find((p) => p.id === positionId);
+  if (!pos) throw new Error("That position is no longer in the account.");
+  const remove = new Set<string>([pos.id]);
+  let booked = "";
+
+  if (pos.type === "stock") {
+    const shares = input.shares && input.shares > 0 ? Math.min(input.shares, pos.qty) : pos.qty;
+    const rec = closed.closeStock(pos, shares, input, acct.label);
+    booked = `${shares} ${pos.symbol} sold @ ${input.closePrice}: ${rec.realizedPnl >= 0 ? "+" : "−"}$${Math.abs(rec.realizedPnl)}`;
+    if (shares < pos.qty) {
+      remove.delete(pos.id);
+      pos.qty -= shares;
+    }
+  } else {
+    const partner = acct.positions.find(
+      (p): p is ManualOption =>
+        p.type === "option" && p.id !== pos.id && p.symbol === pos.symbol && p.optionType === pos.optionType && p.expiration === pos.expiration && p.side !== pos.side,
+    );
+    if (partner && input.closeSpreadTogether && input.netClosePerShare != null) {
+      const shortLeg = pos.side === "short" ? pos : partner;
+      const longLeg = pos.side === "short" ? partner : pos;
+      const rec = closed.closeSpread(shortLeg, longLeg, input.netClosePerShare, input, acct.label);
+      remove.add(partner.id);
+      booked = `${pos.symbol} ${shortLeg.strike}/${longLeg.strike} spread: ${rec.realizedPnl >= 0 ? "+" : "−"}$${Math.abs(rec.realizedPnl)}`;
+    } else if (pos.side === "short" && pos.optionType === "put") {
+      const rec = closed.closeCsp(pos, input, acct.label);
+      booked = rec.outcome === "assigned" ? `${pos.symbol} put assigned — premium folded into the shares' basis` : `${pos.symbol} put: ${rec.realizedPnl >= 0 ? "+" : "−"}$${Math.abs(rec.realizedPnl)}`;
+      if (input.assigned) {
+        // Take delivery: 100 shares per contract at the strike, basis net of the premium.
+        acct.positions.push({
+          id: newId(),
+          type: "stock",
+          symbol: pos.symbol,
+          qty: 100 * pos.qty,
+          avgCost: Math.round((pos.strike - pos.premium) * 100) / 100,
+          openedAt: input.closedAt,
+        });
+        booked += `; ${100 * pos.qty} shares added @ ${(pos.strike - pos.premium).toFixed(2)}`;
+      }
+    } else if (pos.side === "short") {
+      const rec = closed.closeCoveredCall(pos, input, acct.label);
+      booked = `${pos.symbol} call: ${rec.realizedPnl >= 0 ? "+" : "−"}$${Math.abs(rec.realizedPnl)}`;
+      if (input.assigned) {
+        // Called away: the covering shares leave at the strike, booked as a stock sale.
+        let toSell = 100 * pos.qty;
+        for (const s of acct.positions) {
+          if (toSell <= 0) break;
+          if (s.type !== "stock" || s.symbol !== pos.symbol || s.qty <= 0) continue;
+          const n = Math.min(s.qty, toSell);
+          const rec2 = closed.closeStock(s, n, { closePrice: pos.strike, closedAt: input.closedAt }, acct.label);
+          booked += `; ${n} shares called away @ ${pos.strike}: ${rec2.realizedPnl >= 0 ? "+" : "−"}$${Math.abs(rec2.realizedPnl)}`;
+          s.qty -= n;
+          if (s.qty === 0) remove.add(s.id);
+          toSell -= n;
+        }
+      }
+    } else {
+      const rec = closed.closeLongOption(pos, input, acct.label);
+      booked = `${pos.symbol} ${pos.optionType}: ${rec.realizedPnl >= 0 ? "+" : "−"}$${Math.abs(rec.realizedPnl)}`;
+    }
+  }
+
+  acct.positions = acct.positions.filter((p) => !remove.has(p.id));
+  acct.updatedAt = new Date().toISOString();
+  writeManualFile(doc);
+  return { account: acct, booked };
 }
 
 // ---- validation shared by the form and the importer ------------------------

@@ -12,7 +12,7 @@
 // before showing a preview of what will be imported.
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ManualAccount, ManualPosition } from "@/lib/manual-positions";
+import type { ManualAccount, ManualOption, ManualPosition } from "@/lib/manual-positions";
 import {
   FIELD_HELP,
   FIELD_LABEL,
@@ -36,7 +36,7 @@ const btnPrimary = "rounded-full bg-emerald-500/15 px-4 py-1.5 text-xs font-medi
 const btnQuiet = "rounded-full bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted ring-1 ring-inset ring-border hover:text-text disabled:opacity-50";
 const money = (n: number) => "$" + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
-async function post(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string; account?: ManualAccount; added?: number; skipped?: string[] }> {
+async function post(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string; account?: ManualAccount; added?: number; skipped?: string[]; booked?: string }> {
   const res = await fetch("/api/manual", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return res.json();
 }
@@ -57,6 +57,7 @@ export function ManualPositions({ initial }: { initial: ManualAccount[] }) {
   const [msg, setMsg] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [closing, setClosing] = useState<string | null>(null); // position id with the close form open
 
   const account = accounts.find((a) => a.id === selected) ?? null;
 
@@ -159,15 +160,41 @@ export function ManualPositions({ initial }: { initial: ManualAccount[] }) {
           ) : (
             <ul className="divide-y divide-border rounded-xl border border-border">
               {account.positions.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
-                  <div className="min-w-0">
-                    <span className="font-semibold">{p.symbol}</span>{" "}
-                    <span className={`rounded px-1 py-0.5 text-[9.5px] font-semibold ${p.type === "stock" ? "bg-cyan-500/15 text-cyan-300" : p.optionType === "put" ? "bg-sky-500/15 text-sky-300" : "bg-violet-500/15 text-violet-300"}`}>
-                      {p.type === "stock" ? "STOCK" : p.optionType.toUpperCase()}
-                    </span>
-                    <div className="truncate text-muted">{describe(p)}</div>
+                <li key={p.id} className="px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-semibold">{p.symbol}</span>{" "}
+                      <span className={`rounded px-1 py-0.5 text-[9.5px] font-semibold ${p.type === "stock" ? "bg-cyan-500/15 text-cyan-300" : p.optionType === "put" ? "bg-sky-500/15 text-sky-300" : "bg-violet-500/15 text-violet-300"}`}>
+                        {p.type === "stock" ? "STOCK" : p.optionType.toUpperCase()}
+                      </span>
+                      <div className="truncate text-muted">{describe(p)}</div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button onClick={() => setClosing(closing === p.id ? null : p.id)} className={btnQuiet} title="Book the realized P&L and take it off the account">
+                        {closing === p.id ? "Cancel" : "Close"}
+                      </button>
+                      <button onClick={() => removePosition(p.id)} aria-label={`Remove ${p.symbol} without booking it`} title="Remove without booking any P&L" className="text-muted hover:text-rose-400">✕</button>
+                    </div>
                   </div>
-                  <button onClick={() => removePosition(p.id)} aria-label={`Remove ${p.symbol}`} className="shrink-0 text-muted hover:text-rose-400">✕</button>
+                  {closing === p.id && (
+                    <CloseForm
+                      accountId={account.id}
+                      position={p}
+                      partner={
+                        p.type === "option"
+                          ? account.positions.find(
+                              (q): q is ManualOption =>
+                                q.type === "option" && q.id !== p.id && q.symbol === p.symbol && q.optionType === p.optionType && q.expiration === p.expiration && q.side !== p.side,
+                            ) ?? null
+                          : null
+                      }
+                      onClosed={(a, booked) => {
+                        setClosing(null);
+                        sync(a);
+                        setMsg(`Booked: ${booked}. It shows under P&L → Realized.`);
+                      }}
+                    />
+                  )}
                 </li>
               ))}
             </ul>
@@ -268,6 +295,130 @@ function AddForm({ accountId, onAdded }: { accountId: string; onAdded: (a: Manua
       <div className="flex items-center gap-2">
         <button onClick={submit} disabled={busy} className={btnPrimary}>{busy ? "Saving…" : "Add"}</button>
         {err && <span className="text-xs text-rose-400">{err}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---- close form ----------------------------------------------------------------
+const today = () => new Date().toISOString().slice(0, 10);
+
+function CloseForm({
+  accountId,
+  position: p,
+  partner,
+  onClosed,
+}: {
+  accountId: string;
+  position: ManualPosition;
+  partner: ManualOption | null; // the opposite leg of a vertical, if this is one
+  onClosed: (a: ManualAccount, booked: string) => void;
+}) {
+  // One narrowed handle for the option-only fields; null for a stock row.
+  const opt: ManualOption | null = p.type === "option" ? p : null;
+  const isOpt = opt !== null;
+  const shortOpt = opt !== null && opt.side === "short";
+  const [price, setPrice] = useState("");
+  const [date, setDate] = useState(today());
+  const [fees, setFees] = useState("");
+  const [how, setHow] = useState<"closed" | "expired" | "assigned">("closed");
+  const [shares, setShares] = useState(p.type === "stock" ? String(p.qty) : "");
+  const [together, setTogether] = useState(!!partner);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const closePrice = how === "closed" ? Number(price || 0) : 0;
+  // Live preview of what will be booked, mirroring lib/manual-closed.ts.
+  let preview: string | null = null;
+  if (p.type === "stock") {
+    const n = Math.min(Number(shares) || 0, p.qty);
+    if (n > 0 && price) preview = `${(Number(price) - p.avgCost) * n - Number(fees || 0) >= 0 ? "+" : "−"}$${Math.abs((Number(price) - p.avgCost) * n - Number(fees || 0)).toFixed(2)} on ${n} shares`;
+  } else if (opt && partner && together) {
+    const s = opt.side === "short" ? opt : partner;
+    const l = opt.side === "short" ? partner : opt;
+    const n = Math.min(s.qty, l.qty);
+    const pnl = (s.premium - l.premium - Number(price || 0)) * 100 * n - Number(fees || 0);
+    preview = `${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(2)} on the ${s.strike}/${l.strike} spread`;
+  } else if (opt && how === "assigned" && opt.side === "short" && opt.optionType === "put") {
+    preview = `no realized gain booked — the $${(opt.premium * 100 * opt.qty).toFixed(2)} premium lowers the basis of ${100 * opt.qty} shares added at $${(opt.strike - opt.premium).toFixed(2)}`;
+  } else if (opt) {
+    const pnl = (opt.side === "short" ? opt.premium - closePrice : closePrice - opt.premium) * 100 * opt.qty - Number(fees || 0);
+    preview = `${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(2)}`;
+  }
+  const hows: [typeof how, string][] = [
+    ["closed", "Bought/sold to close"],
+    ["expired", "Expired worthless"],
+  ];
+  if (opt && opt.side === "short") hows.push(["assigned", opt.optionType === "put" ? "Assigned" : "Called away"]);
+
+  async function submit() {
+    setBusy(true);
+    setErr("");
+    const r = await post({
+      action: "close",
+      accountId,
+      id: p.id,
+      closePrice: partner && together ? 0 : closePrice,
+      closedAt: date,
+      fees: fees || undefined,
+      expired: how === "expired",
+      assigned: how === "assigned",
+      shares: p.type === "stock" ? Number(shares) : undefined,
+      netClosePerShare: partner && together ? Number(price || 0) : undefined,
+      closeSpreadTogether: !!partner && together,
+    });
+    setBusy(false);
+    if (!r.ok || !r.account) return setErr(r.error ?? "Could not close.");
+    onClosed(r.account, r.booked ?? "closed");
+  }
+
+  return (
+    <div className="mt-2 space-y-2 rounded-lg border border-border bg-surface-2/40 p-2.5">
+      {isOpt && !(partner && together) && (
+        <div className="flex rounded-lg border border-border bg-surface-2 p-0.5 text-[11px] font-medium">
+          {hows.map(([k, label]) => (
+            <button key={k} onClick={() => setHow(k)} className={`flex-1 rounded-md px-2 py-1 ${how === k ? "bg-surface text-text shadow-sm" : "text-muted"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {opt && partner && (
+        <label className="flex items-center gap-2 text-[11px]">
+          <input type="checkbox" checked={together} onChange={(e) => setTogether(e.target.checked)} />
+          <span>Close both legs of the {opt.symbol} {Math.min(opt.strike, partner.strike)}/{Math.max(opt.strike, partner.strike)} {opt.optionType} spread together</span>
+        </label>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        {(how === "closed" || (partner && together) || p.type === "stock") && (
+          <div>
+            <label className={labelClass} htmlFor={`close-price-${p.id}`}>
+              {p.type === "stock" ? "Sale price per share" : partner && together ? "Net to close (per share, debit +)" : "Close price per share"}
+            </label>
+            <input id={`close-price-${p.id}`} value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="0.00" className={inputClass} />
+          </div>
+        )}
+        {p.type === "stock" && (
+          <div>
+            <label className={labelClass} htmlFor={`close-shares-${p.id}`}>Shares sold</label>
+            <input id={`close-shares-${p.id}`} value={shares} onChange={(e) => setShares(e.target.value)} inputMode="decimal" className={inputClass} />
+          </div>
+        )}
+        <div>
+          <label className={labelClass} htmlFor={`close-date-${p.id}`}>Closed on</label>
+          <input id={`close-date-${p.id}`} type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor={`close-fees-${p.id}`}>Fees, total (optional)</label>
+          <input id={`close-fees-${p.id}`} value={fees} onChange={(e) => setFees(e.target.value)} inputMode="decimal" placeholder="0.00" className={inputClass} />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={submit} disabled={busy || (how === "closed" && !(partner && together) && price === "" && isOpt) || (!isOpt && !price)} className={btnPrimary}>
+          {busy ? "Booking…" : "Book it"}
+        </button>
+        {preview && <span className="text-[11px] text-muted">Realized: {preview}</span>}
+        {err && <span className="text-[11px] text-rose-400">{err}</span>}
       </div>
     </div>
   );
