@@ -218,7 +218,12 @@ export function ReconcileSchwab({
                   {/* Differences by symbol */}
                   {result.bySymbol.length > 0 && (
                     <div>
-                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">Where they differ</div>
+                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">{pctOff <= 0.005 ? "Small differences — nothing to do" : "Where they differ"}</div>
+                      <p className="mb-2 text-[11px] text-muted">
+                        {pctOff <= 0.005
+                          ? "These are tax-versus-economic and rounding differences: wash sales, how an assigned option's premium is spread over the shares, fee allocation on multi-fill orders. Worth a look only if one grows."
+                          : "Work from the top. \"Needs a cost basis\" is fixed with the button above. \"Booked as expired\" or \"not in the app\" usually clears with Build history, which re-pulls a year of Schwab activity. Shares bought before that reach need \"Add a stock sale\". Wash-sale lines need nothing."}
+                      </p>
                       <ul className="divide-y divide-border rounded-xl border border-border">
                         {result.bySymbol.slice(0, 40).map((d) => (
                           <li key={`${d.side}-${d.symbol}`} className="px-3 py-2">
@@ -256,7 +261,9 @@ export function ReconcileSchwab({
 
                   {result.washSales.lots > 0 && (
                     <p className="text-muted">
-                      Schwab flagged {result.washSales.lots} wash-sale {result.washSales.lots === 1 ? "lot" : "lots"} and disallowed {money(result.washSales.disallowed)} of loss. That loss isn&apos;t gone: it moves into the
+                      Schwab flagged {result.washSales.lots} wash-sale {result.washSales.lots === 1 ? "lot" : "lots"} and disallowed{" "}
+                      <span className="text-text">{money(result.washSales.disallowed)}</span>{" "}
+                      of loss. That loss isn&apos;t gone: it moves into the
                       replacement shares&apos; basis and shows up when they&apos;re sold. The app&apos;s economic P&amp;L counts it now, so it will read that much lower than Schwab until then.
                     </p>
                   )}
