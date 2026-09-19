@@ -198,8 +198,8 @@ function CashField({ value, onSave }: { value: number; onSave: (n: number) => vo
   const [editing, setEditing] = useState(false);
   if (!editing)
     return (
-      <button onClick={() => setEditing(true)} className={btnQuiet} title="Cash held in this account — used for its total value">
-        Cash {money(value)}
+      <button onClick={() => setEditing(true)} className={btnQuiet} title="Free cash in this account, beyond what secures its sold puts. The total counts that collateral separately.">
+        Free cash {money(value)}
       </button>
     );
   return (
@@ -286,6 +286,10 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
   const [opts, setOpts] = useState<ImportOptions>({ defaultOptionSide: "short" });
   const [replace, setReplace] = useState(false);
   const [useCash, setUseCash] = useState(true);
+  // Whether the file's cash row includes the cash securing the sold puts (a
+  // cash-secured account's balance does) or is free cash only. null = decide
+  // from the numbers: if the row covers the collateral, assume it includes it.
+  const [cashIncludes, setCashIncludes] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -293,6 +297,16 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
   const result: ImportResult | null = useMemo(() => (rows.length ? convertRows(rows, map, opts, firstLine) : null), [rows, map, opts, firstLine]);
   const good = result?.rows.filter((r) => r.position) ?? [];
   const bad = result?.rows.filter((r) => r.error) ?? [];
+  // Cash securing the sold puts in this file. The account is valued the way the
+  // rest of the app values it — a CSP counts as its collateral — so the cash we
+  // store is FREE cash, beyond that collateral.
+  const shortPutCollateral = good.reduce((s, r) => {
+    const p = r.position!;
+    return p.type === "option" && p.optionType === "put" && p.side === "short" ? s + (p.strike ?? 0) * 100 * p.qty : s;
+  }, 0);
+  const cashCoversCollateral = result?.cash != null && shortPutCollateral > 0 && result.cash >= shortPutCollateral;
+  const includes = cashIncludes ?? cashCoversCollateral;
+  const freeCash = result?.cash == null ? null : includes ? Math.max(0, result.cash - shortPutCollateral) : result.cash;
   const unused = headers.map((h, i) => ({ h, i })).filter(({ h, i }) => h.trim() && !Object.values(map).includes(i));
   // Only ask about fields that would actually rescue a row, and only when
   // there is an unused column that could be the answer.
@@ -330,7 +344,7 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
       accountId: account.id,
       replace,
       rows: good.map((g) => g.position),
-      cash: useCash && result?.cash != null ? result.cash : undefined,
+      cash: useCash && freeCash != null ? freeCash : undefined,
     });
     setBusy(false);
     if (!r.ok || !r.account) return setErr(r.error ?? "Import failed.");
@@ -377,7 +391,7 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
                 Optional: <span className="text-text">{FIELD_LABEL.openedAt}</span> for days in trade, and{" "}
                 <span className="text-text">{FIELD_LABEL.costTotal}</span> if the file has a total instead of a per-share price.
                 A negative quantity, or a Side column, marks a sold option. A cash row (Schwab&apos;s &ldquo;Cash &amp; Cash
-                Investments&rdquo;, Fidelity&apos;s core position) sets the account&apos;s cash from its value column.
+                Investments&rdquo;, Fidelity&apos;s core position) sets the account&apos;s free cash from its value column.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -487,19 +501,43 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
                 );
               })}
             </ul>
-            {result?.cash != null && (
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={useCash} onChange={(e) => setUseCash(e.target.checked)} />
-                <span>
-                  Set {account.label}&apos;s cash to <span className="font-semibold text-text">{money(result.cash)}</span>, read from the
-                  file&apos;s cash row. Cash is what makes the account total right — short options alone read as a liability.
-                </span>
-              </label>
+            {result?.cash != null && freeCash != null && (
+              <div className="space-y-2 rounded-lg border border-border bg-surface p-3">
+                <div>
+                  The file&apos;s cash row reads <span className="font-semibold text-text">{money(result.cash)}</span>.
+                  {shortPutCollateral > 0 && (
+                    <>
+                      {" "}Its sold puts tie up <span className="font-semibold text-text">{money(shortPutCollateral)}</span> of collateral, which
+                      the account total already counts.
+                    </>
+                  )}
+                </div>
+                {shortPutCollateral > 0 && (
+                  <label className="flex flex-wrap items-center gap-2">
+                    <span className="text-muted">That cash figure</span>
+                    <select
+                      id="import-cash-mode"
+                      value={includes ? "includes" : "free"}
+                      onChange={(e) => setCashIncludes(e.target.value === "includes")}
+                      className={`${inputClass} w-auto py-1`}
+                    >
+                      <option value="includes">includes the cash securing the puts</option>
+                      <option value="free">is free cash only</option>
+                    </select>
+                  </label>
+                )}
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={useCash} onChange={(e) => setUseCash(e.target.checked)} />
+                  <span>
+                    Set {account.label}&apos;s free cash to <span className="font-semibold text-text">{money(freeCash)}</span>
+                  </span>
+                </label>
+              </div>
             )}
-            {result?.cash == null && account.cash === 0 && (
-              <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-amber-200">
-                No cash row was found in this file and the account&apos;s cash is $0. If it holds cash-secured puts, set its cash
-                afterwards (the Cash button) or the account total will show as a negative number.
+            {result?.cash == null && (
+              <p className="text-muted">
+                No cash row in this file, so free cash stays at {money(account.cash)}. The total still counts the collateral behind
+                any sold puts; use the Cash button to add cash beyond that.
               </p>
             )}
             <label className="flex items-center gap-2">
