@@ -37,16 +37,27 @@ export function ReconcileSchwab({
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState<number | null>(null);
   const [corrected, setCorrected] = useState<number | null>(null);
+  const [added, setAdded] = useState<number | null>(null);
+  const [includeOld, setIncludeOld] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const stamped = records.some((r) => r.accountId);
   const result = useMemo(() => (report ? reconcile(report, records, accountId || null) : null), [report, records, accountId]);
-  const basis = useMemo(() => (report ? proposeCostBasis(unresolved.filter((u) => u.costPerShare == null), report.lots, entered) : null), [report, unresolved, entered]);
+  const basis = useMemo(() => {
+    if (!report || !result) return null;
+    // Same account scope as the comparison, so lots aren't used up by another account's sales.
+    const scoped = accountId ? records.filter((r) => r.accountId === accountId || r.manual) : records;
+    return proposeCostBasis(unresolved.filter((u) => u.costPerShare == null), report.lots, entered, scoped, result.historyStart);
+  }, [report, result, unresolved, entered, records, accountId]);
+  const missingNow = basis ? basis.missing.filter((m) => !m.beforeHistory) : [];
+  const missingOld = basis ? basis.missing.filter((m) => m.beforeHistory) : [];
+  const missingPick = includeOld ? [...missingNow, ...missingOld] : missingNow;
 
   async function onFile(file: File) {
     setErr("");
     setApplied(null);
     setCorrected(null);
+    setAdded(null);
     const parsed = parseSchwabRealized(await file.text());
     if ("error" in parsed) return setErr(parsed.error);
     setFileName(file.name);
@@ -76,15 +87,35 @@ export function ReconcileSchwab({
     setApplying(true);
     let ok = 0;
     for (const c of basis.corrections) {
-      const res = await fetch("/api/stocks/cost-basis", {
-        method: "POST",
+      // A cost basis and a hand-added sale live in different files.
+      const res = await fetch(c.kind === "sale" ? "/api/stocks/manual-sale" : "/api/stocks/cost-basis", {
+        method: c.kind === "sale" ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: c.id, costPerShare: c.costPerShare, acquiredDate: c.acquiredDate ?? "" }),
       });
-      if (res.ok) ok += 1;
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.ok !== false) ok += 1;
     }
     setApplying(false);
     setCorrected(ok);
+    router.refresh();
+  }
+
+  // Add the sales Schwab has and the app doesn't, straight from Schwab's lots.
+  async function applyMissing() {
+    setApplying(true);
+    let ok = 0;
+    for (const m of missingPick) {
+      const res = await fetch("/api/stocks/manual-sale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: m.symbol, shares: m.shares, proceedsPerShare: m.proceedsPerShare, costPerShare: m.costPerShare, acquiredDate: m.acquiredDate, soldDate: m.soldDate }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.ok !== false) ok += 1;
+    }
+    setApplying(false);
+    setAdded(ok);
     router.refresh();
   }
 
@@ -280,6 +311,71 @@ export function ReconcileSchwab({
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {/* What became of everything typed in by hand: said out loud either way */}
+                  {basis && basis.checked.total > 0 && (
+                    <div className="rounded-xl border border-border bg-surface p-3 text-muted">
+                      Checked the {basis.checked.total} {basis.checked.total === 1 ? "cost" : "costs"} you entered by hand against Schwab&apos;s lots:{" "}
+                      <span className="text-emerald-300">{basis.checked.agree} match</span>
+                      {basis.checked.differ > 0 && <>, <span className="text-amber-200">{basis.checked.differ} differ (above)</span></>}
+                      {basis.checked.notFound.length > 0 && <>, <span className="text-text">{basis.checked.notFound.length} couldn&apos;t be lined up with this report</span></>}.
+                      {basis.checked.notFound.length > 0 && (
+                        <ul className="mt-1.5 max-h-32 space-y-0.5 overflow-y-auto tabular text-[11px]">
+                          {basis.checked.notFound.map((n) => (
+                            <li key={n.id}>
+                              <span className="font-semibold text-text" data-ticker={n.symbol}>{n.symbol}</span> {n.shares.toLocaleString()} sh sold {n.closeDate}: {n.why}.
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Sales in Schwab's report that the app has no record of */}
+                  {basis && !accountId && (missingNow.length > 0 || missingOld.length > 0 || added !== null) && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                      {added !== null ? (
+                        <div className="text-emerald-300">
+                          Added {added} {added === 1 ? "sale" : "sales"}. The bridge books {added === 1 ? "it" : "them"} on its next rebuild, within a minute or two; then run Reconcile again. You can review or remove any of them under &ldquo;Add a stock sale&rdquo;.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-medium text-amber-200">
+                            {missingPick.length} stock {missingPick.length === 1 ? "sale" : "sales"} in Schwab&apos;s report {missingPick.length === 1 ? "isn't" : "aren't"} in the app — worth{" "}
+                            {signed(missingPick.reduce((s, m) => s + m.gain, 0))} of realized P&amp;L
+                          </div>
+                          <p className="mt-1 text-[11px] text-muted">
+                            Shares you held before the app&apos;s transaction history begins leave no trace when they&apos;re later sold or called away, so the app never books the sale.
+                            These are Schwab&apos;s own lots: sale date, shares, proceeds, cost and the date acquired.
+                          </p>
+                          {missingPick.length > 0 && (
+                            <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto tabular text-muted">
+                              {missingPick.map((m) => (
+                                <li key={m.key}>
+                                  <span className="font-semibold text-text" data-ticker={m.symbol}>{m.symbol}</span> {m.shares.toLocaleString()} sh sold {m.soldDate} @ ${m.proceedsPerShare.toFixed(2)}, cost ${m.costPerShare.toFixed(2)}, acquired {m.acquiredDate} ·{" "}
+                                  <span className={m.gain >= 0 ? "text-emerald-400" : "text-rose-400"}>{signed(m.gain)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {missingOld.length > 0 && (
+                            <label className="mt-2 flex items-center gap-2 text-[11px] text-muted">
+                              <input type="checkbox" checked={includeOld} onChange={(e) => setIncludeOld(e.target.checked)} />
+                              Also include {missingOld.length} {missingOld.length === 1 ? "sale" : "sales"} from before {result.historyStart} ({signed(missingOld.reduce((s, m) => s + m.gain, 0))}), so older years match Schwab too
+                            </label>
+                          )}
+                          <div className="mt-2">
+                            <button onClick={applyMissing} disabled={applying || missingPick.length === 0} className={btn}>
+                              {applying ? "Adding…" : `Add ${missingPick.length === 1 ? "this sale" : `these ${missingPick.length} sales`}`}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {basis && accountId && basis.missing.length > 0 && (
+                    <p className="text-muted">Switch &ldquo;Compare against&rdquo; to all accounts to see sales Schwab has that the app doesn&apos;t. That check needs the whole picture to avoid false alarms.</p>
                   )}
 
                   {/* Differences by symbol */}

@@ -25,6 +25,7 @@ export interface AppClosed {
   outcome: string;
   accountId?: string;
   manual?: boolean; // a hand-entered cost basis or a hand-added sale: says nothing about where history begins
+  shares?: number; // stock only: lets a sale be lined up with Schwab's lots
 }
 
 export interface SymbolDiff {
@@ -58,7 +59,7 @@ export function reconcile(report: SchwabReport, records: AppClosed[], accountId:
   const to = report.to ?? dates[dates.length - 1];
   const forAccount = accountId ? records.filter((r) => r.accountId === accountId) : records;
   const inWindow = records.filter((r) => r.closedAt >= from && r.closedAt <= to);
-  const scoped = forAccount.filter((r) => r.closedAt >= from && r.closedAt <= to);
+  const inRange = forAccount.filter((r) => r.closedAt >= from && r.closedAt <= to);
   const unstamped = inWindow.filter((r) => !r.accountId).length;
 
   // Where the app's own history begins: the earliest date on any trade it
@@ -68,6 +69,9 @@ export function reconcile(report: SchwabReport, records: AppClosed[], accountId:
   const historyStart = known.length ? known.reduce((a, b) => (a < b ? a : b)) : null;
   const before = historyStart ? report.lots.filter((l) => l.closed < historyStart) : [];
   const lots = historyStart ? report.lots.filter((l) => l.closed >= historyStart) : report.lots;
+  // Both sides start at the same date: a sale added by hand from before the app's
+  // history is set aside along with Schwab's lots from then.
+  const scoped = historyStart ? inRange.filter((r) => r.closedAt >= historyStart) : inRange;
 
   const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
   const sOpt = sum(lots.filter((l) => l.isOption).map((l) => l.gain));
@@ -112,7 +116,7 @@ export function reconcile(report: SchwabReport, records: AppClosed[], accountId:
     else if (b.schwab === 0) reason = side === "options" ? "Only in the app: likely an assignment older than the transactions feed, booked as expired." : "Only in the app: check the account filter.";
     else if (b.wash > 0 && Math.abs(diff + b.wash) <= Math.max(TOLERANCE, b.wash * 0.05)) reason = `Wash sales: Schwab disallowed ${Math.round(b.wash).toLocaleString()} of loss here. A tax adjustment, not a P&L error.`;
     else if (b.wash > 0) reason = `Partly wash sales (${Math.round(b.wash).toLocaleString()} disallowed); the rest is lot matching or a missing fill.`;
-    else if (side === "stock" && b.manual > 0) reason = `Amounts differ, and ${b.manual === 1 ? "a sale here uses" : `${b.manual} sales here use`} a cost basis entered by hand. If this report covers ${b.manual === 1 ? "it" : "them"}, the check above compares your number with Schwab's.${early}`;
+    else if (side === "stock" && b.manual > 0) reason = `Amounts differ, and ${b.manual === 1 ? "a sale here uses" : `${b.manual} sales here use`} a cost entered by hand. The summary of your hand-entered costs above says whether Schwab agrees with ${b.manual === 1 ? "it" : "them"}; if it does, the rest is sales the app never saw.${early}`;
     else if (side === "stock") reason = `Amounts differ: usually cost basis (assignment premium, Schwab selling different tax lots than first-in-first-out) or a missing purchase.${early}`;
     else reason = `Amounts differ: usually a close the app never saw, so it booked the option as expired.${early}`;
     bySymbol.push({ symbol, side, schwab: b.schwab, app: b.app, diff, reason });
@@ -150,7 +154,7 @@ export function reconcile(report: SchwabReport, records: AppClosed[], accountId:
   };
 }
 
-// ---- cost basis from the report ------------------------------------------------
+// ---- stock sales: cost bases, corrections, and sales the app never saw ---------
 export interface UnresolvedSale {
   id: string;
   symbol: string;
@@ -161,9 +165,12 @@ export interface UnresolvedSale {
   acquiredDate?: string | null;
 }
 
-/** A cost basis the user already typed in (manual_cost_basis.json), with the sale it belongs to. */
+/** Something the user typed in, with the sale it belongs to: a cost basis for a
+ *  sale the bridge found ("basis", manual_cost_basis.json) or a whole sale added by
+ *  hand ("sale", manual_stock_sales.json). Both can be wrong in the same way. */
 export interface EnteredBasis {
   id: string;
+  kind?: "basis" | "sale";
   symbol: string;
   shares: number;
   soldAt: number;
@@ -183,55 +190,122 @@ export interface BasisProposal {
   gain: number;
 }
 
-/** An entered cost basis that Schwab's own lots disagree with. */
+/** An entered cost that Schwab's own lots disagree with. */
 export interface BasisCorrection extends BasisProposal {
+  kind: "basis" | "sale";
   enteredCost: number;
   enteredGain: number;
   delta: number; // gain with Schwab's cost − gain with the entered cost
 }
 
+/** An entered cost this report could not be checked against, and why. */
+export interface NotFound {
+  id: string;
+  symbol: string;
+  shares: number;
+  closeDate: string;
+  why: string;
+}
+
+/** A stock sale in Schwab's report with no counterpart in the app. */
+export interface MissingSale {
+  key: string;
+  symbol: string;
+  shares: number;
+  soldDate: string;
+  acquiredDate: string;
+  proceedsPerShare: number;
+  costPerShare: number;
+  gain: number;
+  beforeHistory: boolean;
+}
+
+export interface BasisReview {
+  proposals: BasisProposal[];
+  unmatched: UnresolvedSale[];
+  corrections: BasisCorrection[];
+  checked: { total: number; agree: number; differ: number; notFound: NotFound[] };
+  missing: MissingSale[];
+}
+
 const DAY = 86_400_000;
 const daysApart = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / DAY;
+const WINDOW_DAYS = 5; // an assignment's shares post a day or two after Schwab's lot date
+const shiftDays = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
 
-/** For each sale, find the report's stock lots for the same symbol sold within
- *  five days (assignment sales post a day or two after Schwab's lot date),
- *  nearest sale price first, consuming part of a lot when the sale is smaller.
- *  Only complete matches are proposed.
+/** Line the report's stock lots up against everything the app knows about stock
+ *  sales, in order of how much each needs the lots:
  *
- *  Sales the app couldn't cost go first. Then the cost bases already entered by
- *  hand are checked against what is left: the number Schwab used is the cost of
- *  the lots it actually sold, which under any lot method other than average is
- *  NOT the position's average cost — the usual way a hand-entered basis is off. */
+ *    1. sales the app couldn't cost          → propose a cost basis
+ *    2. costs and sales the user typed in    → check them; the number Schwab used is
+ *       the cost of the lots it actually sold, which under any lot method other than
+ *       average is NOT the position's average cost — the usual way these are off
+ *    3. sales the app rebuilt from the feeds → just use up their lots
+ *
+ *  Whatever lots are left over are sales Schwab has and the app doesn't: shares
+ *  held since before the transaction feed begins and then sold or called away leave
+ *  no trace in the app at all. Those come back as `missing`, ready to be added.
+ *
+ *  A lot is matched by symbol and sale date (within five days), nearest sale price
+ *  first, and may be used in part. */
 export function proposeCostBasis(
   unresolved: UnresolvedSale[],
   lots: SchwabLot[],
   entered: EnteredBasis[] = [],
-): { proposals: BasisProposal[]; unmatched: UnresolvedSale[]; corrections: BasisCorrection[] } {
+  records: AppClosed[] = [],
+  historyStart: string | null = null,
+): BasisReview {
   const pool = lots.filter((l) => !l.isOption && l.qty > 0).map((l) => ({ ...l, left: l.qty, cps: l.cost / l.qty, pps: l.proceeds / l.qty }));
+  type Lot = (typeof pool)[number];
 
-  const match = (u: UnresolvedSale): BasisProposal | null => {
-    const sym = u.symbol.toUpperCase();
-    const cands = pool
-      .filter((l) => l.root === sym && l.left > 1e-4 && daysApart(l.closed, u.closeDate) <= 5)
-      .sort((a, b) => Math.abs(a.pps - u.soldAt) - Math.abs(b.pps - u.soldAt) || (a.opened ?? "").localeCompare(b.opened ?? ""));
+  const candidates = (sym: string, date: string, price: number | null): Lot[] =>
+    pool
+      .filter((l) => l.root === sym && l.left > 1e-4 && daysApart(l.closed, date) <= WINDOW_DAYS)
+      .sort((a, b) => (price == null ? 0 : Math.abs(a.pps - price) - Math.abs(b.pps - price)) || daysApart(a.closed, date) - daysApart(b.closed, date) || (a.opened ?? "").localeCompare(b.opened ?? ""));
+
+  // Take `shares` from the lots near this sale. Complete matches only, unless `partial`.
+  const take = (sym: string, date: string, shares: number, price: number | null, partial = false) => {
     let got = 0;
     let cost = 0;
     let acquired: string | null = null;
-    const taken: { lot: (typeof pool)[number]; qty: number }[] = [];
-    for (const l of cands) {
-      if (got >= u.shares - 1e-4) break;
-      const take = Math.min(l.left, u.shares - got);
-      got += take;
-      cost += take * l.cps;
-      taken.push({ lot: l, qty: take });
+    const taken: { lot: Lot; qty: number }[] = [];
+    for (const l of candidates(sym, date, price)) {
+      if (got >= shares - 1e-4) break;
+      const q = Math.min(l.left, shares - got);
+      got += q;
+      cost += q * l.cps;
+      taken.push({ lot: l, qty: q });
       if (l.opened && (!acquired || l.opened < acquired)) acquired = l.opened;
     }
-    if (Math.abs(got - u.shares) > 1e-3) return null;
+    const complete = Math.abs(got - shares) <= 1e-3;
+    if (!complete && !partial) return null;
     for (const t of taken) t.lot.left -= t.qty;
-    const cps = Math.round((cost / got) * 10_000) / 10_000;
-    return { id: u.id, symbol: sym, shares: u.shares, soldAt: u.soldAt, closeDate: u.closeDate, costPerShare: cps, acquiredDate: acquired, gain: Math.round((u.soldAt * u.shares - cost) * 100) / 100 };
+    return { got, cost, acquired };
   };
 
+  const match = (u: UnresolvedSale): BasisProposal | null => {
+    const sym = u.symbol.toUpperCase();
+    const m = take(sym, u.closeDate, u.shares, u.soldAt);
+    if (!m) return null;
+    const cps = Math.round((m.cost / m.got) * 10_000) / 10_000;
+    return { id: u.id, symbol: sym, shares: u.shares, soldAt: u.soldAt, closeDate: u.closeDate, costPerShare: cps, acquiredDate: m.acquired, gain: Math.round((u.soldAt * u.shares - m.cost) * 100) / 100 };
+  };
+
+  // Why an entered cost couldn't be checked: say what the report does hold for that symbol.
+  const explain = (e: EnteredBasis): string => {
+    const sym = e.symbol.toUpperCase();
+    const same = lots.filter((l) => !l.isOption && l.root === sym);
+    if (same.length === 0) return `this report has no ${sym} stock sales at all`;
+    const near = same.filter((l) => daysApart(l.closed, e.closeDate) <= WINDOW_DAYS);
+    if (near.length === 0) {
+      const nearest = same.reduce((a, b) => (daysApart(a.closed, e.closeDate) <= daysApart(b.closed, e.closeDate) ? a : b));
+      return `Schwab's nearest ${sym} sale is ${nearest.closed}, ${Math.round(daysApart(nearest.closed, e.closeDate))} days away`;
+    }
+    const qty = near.reduce((s, l) => s + l.qty, 0);
+    return `Schwab shows ${qty.toLocaleString()} sh sold around then, not ${e.shares.toLocaleString()}`;
+  };
+
+  // 1. sales with no cost at all
   const proposals: BasisProposal[] = [];
   const unmatched: UnresolvedSale[] = [];
   for (const u of unresolved) {
@@ -240,17 +314,71 @@ export function proposeCostBasis(
     else unmatched.push(u);
   }
 
+  // 2. what the user typed in
   const claimed = new Set(unresolved.map((u) => u.id));
   const corrections: BasisCorrection[] = [];
+  const notFound: NotFound[] = [];
+  let agree = 0;
+  let total = 0;
   for (const e of entered) {
     if (claimed.has(e.id)) continue;
+    total += 1;
     const p = match(e);
-    if (!p) continue; // not in this report: nothing to say about it
+    if (!p) {
+      notFound.push({ id: e.id, symbol: e.symbol.toUpperCase(), shares: e.shares, closeDate: e.closeDate, why: explain(e) });
+      continue;
+    }
     const enteredGain = Math.round((e.soldAt - e.costPerShare) * e.shares * 100) / 100;
     const delta = Math.round((p.gain - enteredGain) * 100) / 100;
-    if (Math.abs(delta) <= TOLERANCE) continue;
-    corrections.push({ ...p, acquiredDate: p.acquiredDate ?? e.acquiredDate, enteredCost: e.costPerShare, enteredGain, delta });
+    if (Math.abs(delta) <= TOLERANCE) {
+      agree += 1;
+      continue;
+    }
+    corrections.push({ ...p, kind: e.kind ?? "basis", acquiredDate: p.acquiredDate ?? e.acquiredDate, enteredCost: e.costPerShare, enteredGain, delta });
   }
   corrections.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  return { proposals, unmatched, corrections };
+
+  // 3. sales the app rebuilt itself. A hand-entered record was handled above.
+  for (const r of records) {
+    if (r.kind !== "stock" || r.manual || !r.shares) continue;
+    take(r.symbol.toUpperCase(), r.closedAt, r.shares, null, true);
+  }
+
+  // What's left. An entry that couldn't be lined up may BE one of these lots, so
+  // anything near it stays out: adding it would count that sale twice.
+  const unsure = [...notFound, ...unmatched.map((u) => ({ symbol: u.symbol.toUpperCase(), closeDate: u.closeDate }))];
+  const shadowed = (l: Lot) => unsure.some((n) => n.symbol === l.root && daysApart(l.closed, n.closeDate) <= 45);
+  const groups = new Map<string, { lots: Lot[]; qty: number; proceeds: number; cost: number }>();
+  for (const l of pool) {
+    if (l.left <= 1e-3 || shadowed(l)) continue;
+    const longTerm = l.opened ? daysApart(l.opened, l.closed) > 365 : /long/i.test(l.term);
+    const key = `${l.root}|${l.closed}|${longTerm ? "L" : "S"}`;
+    const g = groups.get(key) ?? { lots: [], qty: 0, proceeds: 0, cost: 0 };
+    g.lots.push(l);
+    g.qty += l.left;
+    g.proceeds += l.left * l.pps;
+    g.cost += l.left * l.cps;
+    groups.set(key, g);
+  }
+  const missing: MissingSale[] = [];
+  for (const [key, g] of groups) {
+    const [symbol, soldDate, bucket] = key.split("|");
+    const opened = g.lots.map((l) => l.opened).filter((d): d is string => !!d).sort();
+    // Schwab prints no open date for some lots; keep the holding period it reported.
+    const acquiredDate = opened[0] ?? shiftDays(soldDate, bucket === "L" ? -366 : 0);
+    missing.push({
+      key,
+      symbol,
+      shares: Math.round(g.qty * 10_000) / 10_000,
+      soldDate,
+      acquiredDate,
+      proceedsPerShare: Math.round((g.proceeds / g.qty) * 10_000) / 10_000,
+      costPerShare: Math.round((g.cost / g.qty) * 10_000) / 10_000,
+      gain: Math.round((g.proceeds - g.cost) * 100) / 100,
+      beforeHistory: !!historyStart && soldDate < historyStart,
+    });
+  }
+  missing.sort((a, b) => Math.abs(b.gain) - Math.abs(a.gain));
+
+  return { proposals, unmatched, corrections, checked: { total, agree, differ: corrections.length, notFound }, missing };
 }

@@ -309,3 +309,14 @@ export function addManualStockSale(sale: Omit<ManualStockSale, "id">): ManualSto
 export function deleteManualStockSale(id: string): void {
   writeManualStockSales(readManualStockSales().filter((s) => s.id !== id));
 }
+
+/** Correct the cost (and optionally the acquired date) on a user-added sale. */
+export function updateManualStockSale(id: string, patch: { costPerShare: number; acquiredDate?: string | null }): boolean {
+  const list = readManualStockSales();
+  const row = list.find((s) => s.id === id);
+  if (!row) return false;
+  row.costPerShare = patch.costPerShare;
+  if (patch.acquiredDate && patch.acquiredDate <= row.soldDate) row.acquiredDate = patch.acquiredDate;
+  writeManualStockSales(list);
+  return true;
+}

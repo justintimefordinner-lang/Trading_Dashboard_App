@@ -84,6 +84,12 @@ export default async function PnlPage() {
   const manualSales = readManualStockSales();
   // Cost bases already on file, so a mistyped one can be reviewed and corrected.
   const enteredBases = readManualCostBases();
+  // Everything typed in by hand that Reconcile can check against Schwab's lots: cost
+  // bases for sales the bridge found, and whole sales added from scratch.
+  const reconcileEntered = [
+    ...enteredBases.map((e) => ({ ...e, kind: "basis" as const })),
+    ...manualSales.map((s) => ({ id: s.id, kind: "sale" as const, symbol: s.symbol, shares: s.shares, soldAt: s.proceedsPerShare, closeDate: s.soldDate, costPerShare: s.costPerShare, acquiredDate: s.acquiredDate || null })),
+  ];
   // Every closed round-trip, flattened for the Schwab reconcile (compares by symbol and month).
   // Positions closed by hand in a manual account were held at another broker, so
   // they have no place in a comparison with Schwab.
@@ -93,7 +99,7 @@ export default async function PnlPage() {
     ...coveredF.closed.filter(atSchwab).map((r) => ({ kind: "covered" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
     ...spreadF.closed.filter(atSchwab).map((r) => ({ kind: "spread" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
     ...leapF.closed.filter(atSchwab).map((r) => ({ kind: "leap" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
-    ...stockF.closed.filter(atSchwab).map((r) => ({ kind: "stock" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId, manual: !!(r.manualBasis || r.manualEntry) })),
+    ...stockF.closed.filter(atSchwab).map((r) => ({ kind: "stock" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId, manual: !!(r.manualBasis || r.manualEntry), shares: r.shares })),
   ];
   const reconcileAccounts = snap.accounts.map((a) => ({ id: a.id, label: `${accountLabel(a)} ${a.mask}` }));
 
@@ -105,7 +111,7 @@ export default async function PnlPage() {
           subtitle={`${account.nickname ?? account.mask} · realized and open by strategy`}
           right={
             <div className="flex items-center gap-2">
-              {hasHistory && <ReconcileSchwab records={appClosed} accounts={reconcileAccounts} unresolved={unresolved} entered={enteredBases} />}
+              {hasHistory && <ReconcileSchwab records={appClosed} accounts={reconcileAccounts} unresolved={unresolved} entered={reconcileEntered} />}
               <CostBasisAlert unresolved={unresolved} />
               <BuildHistory hasHistory={hasHistory} />
             </div>
