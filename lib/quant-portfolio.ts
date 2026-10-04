@@ -3,8 +3,10 @@
 //
 // The rules, from the winning combo (87 v2):
 //   * close a short put once it has captured 50% of its credit — even late in life
-//   * every put stays cash-secured; the margin allowance scales with the VIX
-//   * no name above 10% of buying power (15% when a contract overshoots while adding)
+//   * every put stays cash-secured; the margin allowance scales with the VIX, plus any
+//     extra margin the user set for the account (Quant scan Settings)
+//   * no name above 10% of buying power (15% when a contract overshoots while adding);
+//     both follow the Settings, like the scan page and the trader
 //   * assigned shares: sell a call 7–21 days out at or above cost basis, the furthest
 //     strike still paying ≥0.5% of basis per week; hold with no call if none does
 //   * assigned shares: buy a ~0.75-delta LEAPS ~450 days out (one per 100 shares);
@@ -14,6 +16,7 @@
 import type { AccountData, CoveredCallQuote } from "./types";
 import { capturedPct, daysToExpiry } from "./calc";
 import { capitalCommitted, quantCapacity, quantFit, type QuantCapacity, type QuantScan } from "./quant";
+import { byTraderRank } from "./quant-rank";
 
 export type Urgency = "act" | "income" | "deploy" | "note";
 
@@ -55,11 +58,22 @@ function bySymbol<T extends { symbol: string }>(xs: T[]): Map<string, T[]> {
   return m;
 }
 
-export function checkPortfolio(data: AccountData, vix: number | null, scan: QuantScan | null, reservePct = 0): PortfolioCheck {
-  // reservePct: the VIX page's cash reserve held back from deployable cash (the
-  // Quant scan's "follow the VIX cash allocation" setting; 0 = the study's way).
-  const rawCap = quantCapacity(data, vix);
+/** Sizing from the Quant scan's Settings (the study's values by default). */
+export interface CheckSizing {
+  reservePct?: number; // the VIX page's cash reserve held back ("follow the VIX cash allocation"); 0 = the study's way
+  extraMargin?: number; // $ added to this account's base
+  maxPerTicker?: number;
+  tickerBand?: number;
+  vrp?: (sym: string) => number | null | undefined; // the Brief's IV/RV, for the trader's ranking
+}
+
+export function checkPortfolio(data: AccountData, vix: number | null, scan: QuantScan | null, sizing: CheckSizing = {}): PortfolioCheck {
+  const reservePct = sizing.reservePct ?? 0;
+  const perName = sizing.maxPerTicker ?? R.maxPerTicker;
+  const band = sizing.tickerBand ?? R.tickerBand;
+  const rawCap = quantCapacity(data, vix, sizing.extraMargin ?? 0);
   const cap = reservePct > 0 ? { ...rawCap, freeCash: Math.max(0, rawCap.freeCash - reservePct * rawCap.totalValue) } : rawCap;
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
   const actions: QuantAction[] = [];
   const compliant: string[] = [];
   // Cash-secured puts only: a spread's short leg is managed as a spread, and is
@@ -95,11 +109,11 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
       rule: "cash-secured",
       symbol: "—",
       title: `Collateral exceeds cash by ${money(-cap.freeCash)}`,
-      detail: `CSPs and spreads pledge ${money(cap.putObligations)}; cash on hand (sweep funds included) ${money(cap.cash)} plus a ${Math.round(cap.margin * 100)}% margin allowance at VIX ${vix != null ? vix.toFixed(1) : "?"} covers ${money(cap.cash + cap.margin * cap.totalValue)}. Close the weakest puts (lowest yield left, nearest the money) until it fits.`,
+      detail: `CSPs and spreads pledge ${money(cap.putObligations)}; cash on hand (sweep funds included) ${money(cap.cash)} plus a ${Math.round(cap.margin * 100)}% margin allowance at VIX ${vix != null ? vix.toFixed(1) : "?"}${cap.extraMargin ? ` and ${money(cap.extraMargin)} extra margin` : ""} covers ${money(cap.cash + cap.margin * cap.totalValue + cap.extraMargin)}. Close the weakest puts (lowest yield left, nearest the money) until it fits.`,
       amount: -cap.freeCash,
     });
   } else if (shortPuts.length) {
-    compliant.push(`Every put and spread is covered: ${money(cap.putObligations)} pledged against ${money(cap.cash + cap.margin * cap.totalValue)} available.`);
+    compliant.push(`Every put and spread is covered: ${money(cap.putObligations)} pledged against ${money(cap.cash + cap.margin * cap.totalValue + cap.extraMargin)} available.`);
   }
 
   // 3. Per-name cap.
@@ -110,31 +124,31 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
     const c = capitalCommitted(data.options.filter((o) => o.symbol === sym), data.equities.filter((e) => e.symbol === sym));
     if (c > 0) committedBy.set(sym, c);
   }
-  const capHi = (R.maxPerTicker + R.tickerBand) * cap.buyingPower;
-  const capLo = R.maxPerTicker * cap.buyingPower;
+  const capHi = (perName + band) * cap.buyingPower;
+  const capLo = perName * cap.buyingPower;
   let over = 0;
   for (const [sym, committed] of [...committedBy.entries()].sort((a, b) => b[1] - a[1])) {
     if (committed > capHi) {
       over += 1;
       actions.push({
         urgency: "act",
-        rule: "10% per name",
+        rule: `${pct(perName)} per name`,
         symbol: sym,
         title: `${sym} is ${money(committed - capLo)} over its cap`,
-        detail: `${money(committed)} in ${sym} (shares, put collateral, spread risk, LEAPS) against a ${money(capLo)} 10% cap; the 15% stretch allocation is ${money(capHi)}. Don't add; let puts run off or close the newest.`,
+        detail: `${money(committed)} in ${sym} (shares, put collateral, spread risk, LEAPS) against a ${money(capLo)} ${pct(perName)} cap; the ${pct(perName + band)} stretch allocation is ${money(capHi)}. Don't add; let puts run off or close the newest.`,
         amount: committed - capLo,
       });
     } else if (committed > capLo) {
       actions.push({
         urgency: "note",
-        rule: "10% per name",
+        rule: `${pct(perName)} per name`,
         symbol: sym,
         title: `${sym} is at its cap`,
-        detail: `${money(committed)} against the ${money(capLo)} 10% cap, inside the 15% stretch allocation (${money(capHi)}). Nothing to do, but no more here.`,
+        detail: `${money(committed)} against the ${money(capLo)} ${pct(perName)} cap, inside the ${pct(perName + band)} stretch allocation (${money(capHi)}). Nothing to do, but no more here.`,
       });
     }
   }
-  if (committedBy.size && !over) compliant.push(`No name is above ${Math.round((R.maxPerTicker + R.tickerBand) * 100)}% of buying power.`);
+  if (committedBy.size && !over) compliant.push(`No name is above ${pct(perName + band)} of buying power.`);
 
   // 4. Covered calls on shares (≥100, no call already on).
   const calledBy = bySymbol(shortCalls);
@@ -216,11 +230,14 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
     }
   }
 
-  // 6. Idle capital: what the scan says would fit.
+  // 6. Idle capital: what the scan says would fit, in the trader's order (names
+  // with earnings inside the put's life last, then its rank).
   if (scan && cap.freeCash > 0) {
+    const sizingParams = { ...scan.meta.params, maxPerTicker: perName, tickerBand: band };
     const fits = scan.rows
-      .filter((r) => r.pick && !r.erInWindow)
-      .map((r) => ({ r, fit: quantFit(r, data, cap, scan.meta.params) }))
+      .filter((r) => r.pick)
+      .sort(byTraderRank(sizing.vrp ?? (() => null)))
+      .map((r) => ({ r, fit: quantFit(r, data, cap, sizingParams) }))
       .filter((x) => x.fit && x.fit.contracts > 0 && !x.fit.full);
     if (fits.length) {
       const best = fits[0];
@@ -229,7 +246,7 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
         rule: "4% target",
         symbol: best.r.sym,
         title: `${money(cap.freeCash)} free: ${fits.length} scan pick${fits.length === 1 ? "" : "s"} fit`,
-        detail: `Richest is ${best.r.sym} $${best.r.pick!.strike} ${best.r.pick!.exp.slice(5)} at ${best.r.pick!.yield30.toFixed(1)}% per 30 days (${best.fit!.contracts} contract${best.fit!.contracts === 1 ? "" : "s"}).`,
+        detail: `First in the trader's queue is ${best.r.sym} $${best.r.pick!.strike} ${best.r.pick!.exp.slice(5)} at ${best.r.pick!.yield30.toFixed(1)}% per 30 days (${best.fit!.contracts} contract${best.fit!.contracts === 1 ? "" : "s"}).`,
         amount: cap.freeCash,
         href: "/quant",
         linkLabel: "(Click to view scan results)",

@@ -2,12 +2,13 @@ import Link from "next/link";
 import { BackLink, Card, PageHeader, Pill, SectionTitle } from "@/components/ui";
 import { Amt, ShowAmounts } from "@/components/privacy";
 import { getSnapshot } from "@/lib/snapshot";
-import { getSelectedAccount } from "@/lib/account";
+import { COMBINED_ID, getCombineIds, getSelectedAccount } from "@/lib/account";
+import { getAmReport } from "@/lib/am-report";
 import { getVixSnapshot } from "@/lib/vix-data";
 import { getQuantScan } from "@/lib/quant";
 import { checkPortfolio, type QuantAction, type Urgency } from "@/lib/quant-portfolio";
 import { fmtMoney } from "@/lib/calc";
-import { readQuantSettings } from "@/lib/quant-settings";
+import { extraMarginFor, readQuantSettings, STUDY_DEFAULTS } from "@/lib/quant-settings";
 import { assessVix } from "@/lib/vix";
 
 export const dynamic = "force-dynamic";
@@ -48,14 +49,25 @@ function ActionCard({ a }: { a: QuantAction }) {
 export default async function QuantPortfolioPage() {
   const snap = await getSnapshot();
   const example = snap.meta.source === "example";
-  const { account, data } = await getSelectedAccount(snap);
+  const { id, account, data } = await getSelectedAccount(snap);
   const vixSnap = getVixSnapshot(example);
   const vix = vixSnap?.inputs.vix ?? null;
   const scan = getQuantScan(example);
-  // The Quant scan's Settings toggles (VIX margin allowance, VIX cash allocation) apply here too.
-  const { vixMargin, vixCash } = example ? { vixMargin: true, vixCash: false } : readQuantSettings().params;
+  // The Quant scan's sizing Settings apply here too (and in the trader): VIX margin,
+  // VIX cash allocation, per-name cap and stretch, and this account's extra margin.
+  const P = example ? STUDY_DEFAULTS : readQuantSettings().params;
+  const { vixMargin, vixCash } = P;
   const reservePct = vixCash && vixSnap ? assessVix(vixSnap).targetReservePct : 0;
-  const check = checkPortfolio(data, vixMargin ? vix : null, scan, reservePct);
+  const extraMargin = id === COMBINED_ID ? (await getCombineIds(snap)).reduce((s, i) => s + extraMarginFor(P, i), 0) : extraMarginFor(P, id);
+  const report = getAmReport(example);
+  const vrpBy = new Map((report?.screened ?? report?.board ?? []).map((b) => [b.sym, b.vrpRatio]));
+  const check = checkPortfolio(data, vixMargin ? vix : null, scan, {
+    reservePct,
+    extraMargin,
+    maxPerTicker: P.maxPerTicker,
+    tickerBand: P.tickerBand,
+    vrp: (s) => vrpBy.get(s),
+  });
   const cap = check.capacity;
   const total = check.actions.length;
 
@@ -75,11 +87,11 @@ export default async function QuantPortfolioPage() {
           </div>
           <ul className="mt-2 space-y-1 text-xs text-muted">
             <li>· Close a short put at <span className="text-text">50% of its credit</span>, however much life is left.</li>
-            <li>· Every put <span className="text-text">cash-secured</span>; {vixMargin ? "the margin allowance follows the VIX (0 under 20, 5% per 5 points, cap 35%)." : "the VIX margin allowance is off (Quant scan → Settings), so cash only."}</li>
-            <li>· No name over <span className="text-text">10% of buying power</span>; a 15% stretch allocation lets one more contract on when a name is under its cap.</li>
+            <li>· Every put <span className="text-text">cash-secured</span>; {vixMargin ? "the margin allowance follows the VIX (0 under 20, 5% per 5 points, cap 35%)" : "the VIX margin allowance is off (Quant scan → Settings), so cash only"}{extraMargin > 0 ? <>, plus <Amt>{fmtMoney(extraMargin)}</Amt> extra margin set for this account</> : ""}.</li>
+            <li>· No name over <span className="text-text">{Math.round(P.maxPerTicker * 100)}% of buying power</span>; a {Math.round((P.maxPerTicker + P.tickerBand) * 100)}% stretch allocation lets one more contract on when a name is under its cap.</li>
             <li>· On shares: sell a <span className="text-text">7–21 day call at or above cost</span>, the furthest strike still paying 0.5% of basis a week; hold with no call if none does.</li>
             <li>· On shares: hold a <span className="text-text">~0.75Δ LEAPS ~450 days out</span> per 100 shares; sell it when they&apos;re called away or inside 90 days. (0.75 beat 0.60 by about 2 points a year across every period tested.)</li>
-            <li>· Idle cash goes to whatever the <Link href="/quant" className="text-emerald-300 underline">scan</Link> says pays.</li>
+            <li>· Idle cash goes to whatever the <Link href="/quant" className="text-emerald-300 underline">scan</Link> says pays, in the Auto Trader&apos;s order (names with earnings inside the put last).</li>
           </ul>
         </Card>
 
@@ -91,7 +103,7 @@ export default async function QuantPortfolioPage() {
             <div><span className="text-muted">Collateral</span> <Amt>{fmtMoney(cap.putObligations)}</Amt> <span className="text-muted">CSPs + spread risk</span></div>
             <div><span className="text-muted">Committed</span> <Amt>{fmtMoney(cap.committedTotal)}</Amt> <span className="text-muted">({cap.totalValue ? Math.round((cap.committedTotal / cap.totalValue) * 100) : 0}%)</span></div>
             <div className="col-span-2 text-muted sm:col-span-4">
-              VIX {vix != null ? vix.toFixed(1) : "—"} → margin allowance {vixMargin ? `${Math.round(cap.margin * 100)}%` : "off"} · buying power <Amt>{fmtMoney(cap.buyingPower)}</Amt> · per-name cap <Amt>{fmtMoney(0.1 * cap.buyingPower)}</Amt>
+              VIX {vix != null ? vix.toFixed(1) : "—"} → margin allowance {vixMargin ? `${Math.round(cap.margin * 100)}%` : "off"} · {cap.extraMargin > 0 && <> · extra margin <Amt>{fmtMoney(cap.extraMargin)}</Amt></>} · buying power <Amt>{fmtMoney(cap.buyingPower)}</Amt> · per-name cap <Amt>{fmtMoney(P.maxPerTicker * cap.buyingPower)}</Amt>
               {reservePct > 0 && <> · VIX cash reserve {Math.round(reservePct * 100)}% held back</>}
             </div>
           </div>

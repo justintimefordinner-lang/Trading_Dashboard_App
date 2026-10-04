@@ -3,12 +3,12 @@
 // The gear at the top of the Quant scan: a popover to change the rule's variables.
 // Saving writes data/quant-settings.json; the bridge reads it on its next scan
 // (Save & scan asks for one right away) and the trader follows the scan's params.
-// Reset puts the study's values back.
+// Reset puts the study's values back (extra margin per account is kept).
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { QuantParams } from "@/lib/quant-settings";
 
-type NumericKey = Exclude<keyof QuantParams, "vixMargin" | "vixCash">;
+type NumericKey = Exclude<keyof QuantParams, "vixMargin" | "vixCash" | "extraMargin">;
 type Field = { key: NumericKey; label: string; hint: string; scale: number; step: number; min: number; max: number };
 const FIELDS: Field[] = [
   { key: "targetYield", label: "Target yield", hint: "% of the strike per yield period", scale: 100, step: 0.5, min: 0.5, max: 20 },
@@ -16,17 +16,33 @@ const FIELDS: Field[] = [
   { key: "maxDelta", label: "Max delta", hint: "never sell a put above this", scale: 1, step: 0.05, min: 0.05, max: 0.6 },
   { key: "expMin", label: "Shortest expiry", hint: "days out", scale: 1, step: 1, min: 1, max: 180 },
   { key: "expMax", label: "Longest expiry", hint: "days out", scale: 1, step: 1, min: 1, max: 180 },
+  { key: "expTarget", label: "Target expiry", hint: "closest expiry to this; 0 = any in the window", scale: 1, step: 1, min: 0, max: 180 },
   { key: "closeAtPct", label: "Close at", hint: "% of the credit captured", scale: 1, step: 5, min: 10, max: 95 },
   { key: "maxPerTicker", label: "Max per name", hint: "% of buying power", scale: 100, step: 1, min: 1, max: 50 },
   { key: "tickerBand", label: "Stretch", hint: "% more for one extra contract", scale: 100, step: 1, min: 0, max: 25 },
 ];
 
-export function QuantSettings({ current, defaults, custom, demo = false }: { current: QuantParams; defaults: QuantParams; custom: boolean; demo?: boolean }) {
+export function QuantSettings({
+  current,
+  defaults,
+  custom,
+  demo = false,
+  accountId = null,
+  accountName = "",
+}: {
+  current: QuantParams;
+  defaults: QuantParams;
+  custom: boolean;
+  demo?: boolean;
+  accountId?: string | null; // the account being viewed; null in the Combined View
+  accountName?: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [vals, setVals] = useState<Record<NumericKey, string>>(() => toForm(current));
   const [vixMargin, setVixMargin] = useState<boolean>(current.vixMargin);
   const [vixCash, setVixCash] = useState<boolean>(current.vixCash);
+  const [extra, setExtra] = useState<string>(() => String((accountId && current.extraMargin?.[accountId]) || 0));
   const [busy, setBusy] = useState<"save" | "scan" | "reset" | null>(null);
   const [msg, setMsg] = useState("");
   const box = useRef<HTMLDivElement | null>(null);
@@ -35,7 +51,8 @@ export function QuantSettings({ current, defaults, custom, demo = false }: { cur
     setVals(toForm(current));
     setVixMargin(current.vixMargin);
     setVixCash(current.vixCash);
-  }, [current]);
+    setExtra(String((accountId && current.extraMargin?.[accountId]) || 0));
+  }, [current, accountId]);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -48,8 +65,15 @@ export function QuantSettings({ current, defaults, custom, demo = false }: { cur
   function toForm(p: QuantParams): Record<NumericKey, string> {
     return Object.fromEntries(FIELDS.map((f) => [f.key, String(round(p[f.key] * f.scale))])) as Record<NumericKey, string>;
   }
-  function fromForm(): Partial<Record<keyof QuantParams, number | boolean>> {
-    return { ...(Object.fromEntries(FIELDS.map((f) => [f.key, Number(vals[f.key]) / f.scale])) as Partial<Record<NumericKey, number>>), vixMargin, vixCash };
+  function fromForm(): Partial<Record<keyof QuantParams, unknown>> {
+    // Extra margin is per account: change only this account's entry, keep the rest.
+    const extraMargin = { ...(current.extraMargin ?? {}) };
+    if (accountId) {
+      const n = Math.max(0, Number(extra) || 0);
+      if (n > 0) extraMargin[accountId] = n;
+      else delete extraMargin[accountId];
+    }
+    return { ...(Object.fromEntries(FIELDS.map((f) => [f.key, Number(vals[f.key]) / f.scale])) as Partial<Record<NumericKey, number>>), vixMargin, vixCash, extraMargin };
   }
 
   async function send(body: Record<string, unknown>, kind: "save" | "scan" | "reset") {
@@ -135,6 +159,30 @@ export function QuantSettings({ current, defaults, custom, demo = false }: { cur
               </span>
             </span>
           </label>
+          <div className="mt-3 rounded-lg border border-border bg-surface-2/50 px-2.5 py-2">
+            <span className="block text-[11px] text-text">Extra margin{accountId && accountName ? ` · ${accountName}` : ""}</span>
+            {accountId ? (
+              <>
+                <div className="mt-1 flex items-center gap-1">
+                  <span className="text-sm text-muted">$</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step={1000}
+                    value={extra}
+                    onChange={(e) => setExtra(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface px-2 py-1 text-sm tabular text-text"
+                  />
+                </div>
+                <span className="mt-1 block text-[10px] leading-relaxed text-muted">
+                  Added to this account&apos;s base, its buying power and free cash, on top of the VIX allowance. Use it for long-term holdings you won&apos;t sell: margin against them keeps the wheel&apos;s capital working. The scan, the portfolio check and the Auto Trader all use it. Study: $0.
+                </span>
+              </>
+            ) : (
+              <span className="mt-1 block text-[10px] text-muted">Set per account: switch to a single account to change it. The Combined View adds up its accounts&apos; amounts.</span>
+            )}
+          </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button onClick={() => send({ params: fromForm() }, "save")} disabled={busy !== null} className="rounded-full bg-sky-500/15 px-3 py-1.5 text-xs font-medium text-sky-300 ring-1 ring-inset ring-sky-500/30 disabled:opacity-50">
               {busy === "save" ? "Saving…" : "Save"}
@@ -148,7 +196,7 @@ export function QuantSettings({ current, defaults, custom, demo = false }: { cur
           </div>
           {msg && <div className="mt-2 text-[11px] text-muted">{msg}</div>}
           <div className="mt-2 text-[10px] leading-relaxed text-muted">
-            The bridge reads these at the start of its next scan and this page follows them. The trader keeps the backtest&apos;s rule regardless.
+            The bridge reads the pick rule at the start of its next scan. Sizing (per-name cap, stretch, the VIX toggles, extra margin) applies to this page, the portfolio check and the Auto Trader; the trader always sells the backtest&apos;s pick.
           </div>
         </div>
       )}

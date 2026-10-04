@@ -3,7 +3,7 @@
 //
 // The rule (from the 2022–2026 backtests, confirmed on the 2023 hold-out): sell
 // the LOWEST-delta put paying at least 4% of the strike per 30 days, never above
-// 0.35 delta, across every expiration 28–45 days out; close at 50% of the credit.
+// 0.35 delta, in the expiration closest to 35 days (28–42); close at 50% of the credit.
 // The bridge applies that to every approved name (market data only). What a pick
 // means for THIS account — how many contracts fit, whether the name is already at
 // its full size — depends on which account is selected, so that part lives here.
@@ -64,7 +64,7 @@ export interface QuantScan {
     marketOpen: boolean | null;
     universe: number;
     qualifying: number;
-    params: { targetYield: number; yieldDays: number; maxDelta: number; expMin: number; expMax: number; closeAtPct: number; maxPerTicker: number; tickerBand: number };
+    params: { targetYield: number; yieldDays: number; maxDelta: number; expMin: number; expMax: number; expTarget?: number; closeAtPct: number; maxPerTicker: number; tickerBand: number };
     source: string;
     elapsedSec?: number;
   };
@@ -101,10 +101,11 @@ export interface QuantCapacity {
   cash: number;
   vix: number | null;
   margin: number; // VIX-scaled allowance, as a fraction of total value
+  extraMargin: number; // $ the user set for this account (margin against holdings they won't sell)
   buyingPower: number;
   putObligations: number;
   committedTotal: number;
-  freeCash: number; // uncommitted cash + the margin allowance
+  freeCash: number; // uncommitted cash + the margin allowance + extra margin
 }
 
 export function vixMargin(vix: number | null): number {
@@ -112,9 +113,13 @@ export function vixMargin(vix: number | null): number {
   return Math.min(0.35, 0.05 * Math.floor(vix / 5));
 }
 
-export function quantCapacity(data: AccountData, vix: number | null): QuantCapacity {
+/** `extraMargin`: dollars the user adds to this account's base (Quant Settings),
+ *  so long-term holdings they won't sell don't leave the wheel short of capital.
+ *  It raises buying power (and with it the per-name cap) and free cash alike. */
+export function quantCapacity(data: AccountData, vix: number | null, extraMargin = 0): QuantCapacity {
   const totalValue = data.summary.totalValue;
   const margin = vixMargin(vix);
+  const extra = Math.max(0, extraMargin);
   // Collateral the short book pledges: CSPs at strike x 100, spreads at their
   // defined risk. A short put inside a spread is NOT a cash-secured put.
   const putObligations = cspCollateralTotal(data.options) + spreadRiskCapital(data.options);
@@ -127,10 +132,11 @@ export function quantCapacity(data: AccountData, vix: number | null): QuantCapac
     cash: free + putObligations, // cash on hand, including what already secures the puts
     vix,
     margin,
-    buyingPower: totalValue * (1 + margin),
+    extraMargin: extra,
+    buyingPower: totalValue * (1 + margin) + extra,
     putObligations,
     committedTotal: capitalCommitted(data.options, data.equities),
-    freeCash: free + margin * totalValue,
+    freeCash: free + margin * totalValue + extra,
   };
 }
 
@@ -192,7 +198,7 @@ function exampleQuantScan(): QuantScan {
   });
   rows.sort((a, b) => Number(!!b.pick) - Number(!!a.pick) || (b.pick ?? b.best)!.yield30 - (a.pick ?? a.best)!.yield30);
   return {
-    meta: { asOf: new Date().toISOString(), marketOpen: true, universe: rows.length, qualifying: rows.filter((r) => r.pick).length, params: { targetYield: 0.04, yieldDays: 30, maxDelta: 0.35, expMin: 28, expMax: 45, closeAtPct: 50, maxPerTicker: 0.1, tickerBand: 0.05 }, source: "example" },
+    meta: { asOf: new Date().toISOString(), marketOpen: true, universe: rows.length, qualifying: rows.filter((r) => r.pick).length, params: { targetYield: 0.04, yieldDays: 30, maxDelta: 0.35, expMin: 28, expMax: 42, expTarget: 35, closeAtPct: 50, maxPerTicker: 0.1, tickerBand: 0.05 }, source: "example" },
     rows,
   };
 }

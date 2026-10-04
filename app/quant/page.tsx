@@ -3,9 +3,10 @@ import { BackLink, Card, PageHeader, Pill, SectionTitle } from "@/components/ui"
 import { Amt, ShowAmounts } from "@/components/privacy";
 import { QuantScanButton } from "@/components/QuantScanButton";
 import { QuantSettings } from "@/components/QuantSettings";
-import { readQuantSettings, STUDY_DEFAULTS } from "@/lib/quant-settings";
+import { extraMarginFor, readQuantSettings, STUDY_DEFAULTS } from "@/lib/quant-settings";
+import { byTraderRank, rankPick, type QuantRank } from "@/lib/quant-rank";
 import { getSnapshot } from "@/lib/snapshot";
-import { getSelectedAccount } from "@/lib/account";
+import { accountLabel, COMBINED_ID, getCombineIds, getSelectedAccount } from "@/lib/account";
 import { getVixSnapshot } from "@/lib/vix-data";
 import { assessVix } from "@/lib/vix";
 import { getQuantScan, quantCapacity, quantFit, type QuantFit, type QuantRow, type QuantScan } from "@/lib/quant";
@@ -70,7 +71,19 @@ function BriefScore({ b }: { b: AmBoardRow | null }) {
   );
 }
 
-function PickCard({ row, fit, P, brief }: { row: QuantRow; fit: QuantFit | null; P: QuantScan["meta"]["params"] | undefined; brief: AmBoardRow | null }) {
+function RankBadge({ r }: { r: QuantRank }) {
+  const cls = r.score >= 65 ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30" : r.score >= 45 ? "bg-sky-500/15 text-sky-300 ring-sky-500/30" : "bg-surface-2 text-muted ring-border";
+  return (
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${cls}`}
+      title={`The Auto Trader's rank: spread ${r.spreadPct != null ? `${Math.round(r.spreadPct)}% of mid` : "unknown"} (40%), delta needed to reach the target (35%), IV/RV ${r.vrpRatio != null ? r.vrpRatio.toFixed(2) : "unknown"} (25%). ${r.perRound > 1 ? `Takes ${r.perRound} contracts a round when cash is short.` : "One contract a round when cash is short."}`}
+    >
+      rank {Math.round(r.score)}
+    </span>
+  );
+}
+
+function PickCard({ row, fit, P, brief, rank }: { row: QuantRow; fit: QuantFit | null; P: QuantScan["meta"]["params"] | undefined; brief: AmBoardRow | null; rank: QuantRank | null }) {
   const p = row.pick!;
   return (
     <Card className="px-4 py-3">
@@ -83,7 +96,7 @@ function PickCard({ row, fit, P, brief }: { row: QuantRow; fit: QuantFit | null;
           <span className="text-xs text-muted">
             {row.price != null ? `$${row.price.toFixed(2)}` : ""}
           </span>{" "}
-          <BriefScore b={brief} />
+          {rank && <RankBadge r={rank} />} <BriefScore b={brief} />
         </div>
         <div className="shrink-0 text-right">
           <div className="text-sm font-semibold text-emerald-300">{pct(p.yield30, 1)} <span className="text-[10px] font-medium text-emerald-300/70">per 30 days</span></div>
@@ -139,20 +152,21 @@ function qs(base: { earnings?: string; cap?: string; sort?: string }, patch: Par
   const v = { ...base, ...patch };
   if (v.earnings === "show") q.set("earnings", "show");
   if (v.cap && v.cap !== "fits") q.set("cap", v.cap);
-  if (v.sort === "yield") q.set("sort", "yield");
+  if (v.sort && v.sort !== "rank") q.set("sort", v.sort);
   const s = q.toString();
   return `/quant${s ? `?${s}` : ""}`;
 }
 
 export default async function QuantPage({ searchParams }: { searchParams: Promise<{ earnings?: string; cap?: string; sort?: string }> }) {
-  // Earnings filter: on unless ?earnings=show. A report inside the put's life is the
-  // one thing the study never tested, so those names are set aside, not hidden.
+  // Names with a report inside the put's life are listed after the rest, the way
+  // the Auto Trader queues them: the backtest traded through earnings, and
+  // skipping them cost about 15 points a year.
   const params = await searchParams;
   const { earnings } = params;
-  const skipEarnings = earnings !== "show";
+  const skipEarnings = true;
   const snap = await getSnapshot();
   const example = snap.meta.source === "example";
-  const { account, data } = await getSelectedAccount(snap);
+  const { id: accountId, account, data } = await getSelectedAccount(snap);
   const scan = getQuantScan(example);
   const vixSnap = getVixSnapshot(example);
   const vix = vixSnap?.inputs.vix ?? null;
@@ -162,22 +176,28 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
   const P = settings.params;
   // With the VIX margin allowance off, capacity is cash-secured only. With the VIX
   // cash allocation on, the VIX page's reserve for today's band is held back.
-  const rawCap = quantCapacity(data, P.vixMargin ? vix : null);
+  // Extra margin set for this account (the Combined View adds up its accounts').
+  const combined = accountId === COMBINED_ID;
+  const extraMargin = combined ? (await getCombineIds(snap)).reduce((s, i) => s + extraMarginFor(P, i), 0) : extraMarginFor(P, accountId);
+  const rawCap = quantCapacity(data, P.vixMargin ? vix : null, extraMargin);
   const reservePct = P.vixCash && vixSnap ? assessVix(vixSnap).targetReservePct : 0;
   const reserve = reservePct * rawCap.totalValue;
   const cap = reserve > 0 ? { ...rawCap, freeCash: Math.max(0, rawCap.freeCash - reserve) } : rawCap;
 
-  // The Brief's screen (trend, VRP, IV rank, liquidity) scores the same names.
-  // Where a pick is on the board, its score orders the list; the yield is the
-  // tie-break, and names the Brief didn't score come last.
+  // Order: the Auto Trader's rank by default (spread, cushion, IV/RV — the order it
+  // hands out capital), or the Brief's score, or yield.
   const report = getAmReport(example);
   const board = new Map((report?.screened ?? report?.board ?? []).map((b) => [b.sym, b]));
-  const sortBy = params.sort === "yield" ? "yield" : "score";
+  const vrpOf = (s: string) => board.get(s)?.vrpRatio ?? null;
+  const sortBy = params.sort === "yield" ? "yield" : params.sort === "score" ? "score" : "rank";
+  const traderOrder = byTraderRank(vrpOf);
   const byScore = (a: QuantRow, b: QuantRow) => {
+    if (sortBy === "rank") return traderOrder(a, b);
     const sa = board.get(a.sym)?.score ?? -1;
     const sb = board.get(b.sym)?.score ?? -1;
     return sortBy === "score" && sb !== sa ? sb - sa : (b.pick?.yield30 ?? 0) - (a.pick?.yield30 ?? 0);
   };
+  const rankOf = (r: QuantRow) => (r.pick ? rankPick(r.pick, vrpOf(r.sym)) : null);
 
   // Capital band: collateral per contract against what free cash can secure.
   const band = BANDS.find((b) => b.key === (params.cap ?? "fits")) ?? BANDS[0];
@@ -190,7 +210,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
   const earningsSkipped = (skipEarnings ? inBand.filter((r) => r.erInWindow) : []).sort(byScore);
   const misses = scan ? scan.rows.filter((r) => !r.pick) : [];
   // Settings that reach the bridge (the VIX toggle is this page's alone): stale when the scan on file used other values.
-  const bridgeKeys = ["targetYield", "yieldDays", "maxDelta", "expMin", "expMax", "closeAtPct", "maxPerTicker", "tickerBand"] as const;
+  const bridgeKeys = ["targetYield", "yieldDays", "maxDelta", "expMin", "expMax", "expTarget", "closeAtPct"] as const;
   const scanParams = (scan?.meta.params ?? {}) as Partial<Record<(typeof bridgeKeys)[number], number>>;
   const scanStale = !!scan && !example && bridgeKeys.some((k) => scanParams[k] !== undefined && scanParams[k] !== P[k]);
   const fits = new Map(qualifying.map((r) => [r.sym, scan ? quantFit(r, data, cap, P) : null]));
@@ -208,7 +228,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
 
         {/* Actions on their own row: three buttons beside the title squeezed it to one word a line on a phone. */}
         <div className="mt-3 flex items-center justify-end gap-2">
-          <QuantSettings current={P} defaults={STUDY_DEFAULTS} custom={settings.custom} demo={example} />
+          <QuantSettings current={P} defaults={STUDY_DEFAULTS} custom={settings.custom} demo={example} accountId={combined ? null : accountId} accountName={accountLabel(account)} />
           <QuantScanButton demo={example} />
         </div>
 
@@ -225,9 +245,10 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
           </div>
           <ul className="mt-2 space-y-1 text-xs text-muted">
             <li>· Sell the <span className="text-text">lowest-delta</span> put paying <span className="text-text">≥ {(P.targetYield * 100).toFixed(1).replace(/\.0$/, "")}% of the strike per {P.yieldDays} days</span> (at the mid), never above <span className="text-text">{P.maxDelta} delta</span>.</li>
-            <li>· Any expiration <span className="text-text">{P?.expMin ?? 28}–{P?.expMax ?? 45} days</span> out; ties go to the higher yield. Skip the name if nothing pays.</li>
+            <li>· {P.expTarget ? <>The expiration <span className="text-text">closest to {P.expTarget} days</span> ({P.expMin}–{P.expMax} days out)</> : <>Any expiration <span className="text-text">{P.expMin}–{P.expMax} days</span> out</>}; ties go to the higher yield. Skip the name if nothing pays.</li>
             <li>· <span className="text-text">Close at {P?.closeAtPct ?? 50}%</span> of the credit, even late in the put&apos;s life. Take assignment; buy a ~0.75Δ LEAPS on it.</li>
             <li>· Up to <span className="text-text">{P ? Math.round(P.maxPerTicker * 100) : 10}% of buying power per name</span> (a {P ? Math.round((P.maxPerTicker + P.tickerBand) * 100) : 15}% stretch allocation lets one more contract on when a name is under its cap). {P.vixMargin ? "Margin allowance scales with the VIX: 0 under 20, then 5% per 5 points, capped at 35%." : "VIX margin allowance off: cash-secured only (the study used the allowance)."}</li>
+            <li>· When cash is short, names go in the <span className="text-text">Auto Trader&apos;s order</span>: no earnings inside the put first, then its rank. The trader sells the study&apos;s pick and follows these sizing settings.</li>
           </ul>
         </Card>
 
@@ -240,7 +261,8 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
             <div><span className="text-muted">Collateral</span> <Amt>{money0(cap.putObligations)}</Amt> <span className="text-muted">CSPs + spread risk</span></div>
             <div><span className="text-muted">Per-name cap</span> <Amt>{money0((P?.maxPerTicker ?? 0.1) * cap.buyingPower)}</Amt></div>
             <div className="col-span-2 sm:col-span-4 text-muted">
-              VIX {vix != null ? vix.toFixed(1) : "—"} → margin allowance {P.vixMargin ? `${Math.round(cap.margin * 100)}%` : "off (Settings)"} · buying power <Amt>{money0(cap.buyingPower)}</Amt>
+              VIX {vix != null ? vix.toFixed(1) : "—"} → margin allowance {P.vixMargin ? `${Math.round(cap.margin * 100)}%` : "off (Settings)"}
+              {cap.extraMargin > 0 && <> · extra margin <Amt>{money0(cap.extraMargin)}</Amt></>} · buying power <Amt>{money0(cap.buyingPower)}</Amt>
               {reserve > 0 && (
                 <>
                   {" "}· VIX cash reserve {Math.round(reservePct * 100)}% (<Amt>{money0(reserve)}</Amt>) held back
@@ -259,13 +281,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
         {scan && (
           <>
             <SectionTitle
-              action={
-                <Link href={qs(view, { earnings: skipEarnings ? "show" : undefined })} className="text-[11px] text-muted underline">
-                  {skipEarnings
-                    ? `${earningsSkipped.length} with earnings before expiry hidden — show them`
-                    : "Names with earnings before expiry are included — hide them"}
-                </Link>
-              }
+              action={earningsSkipped.length > 0 ? <span className="text-[11px] text-muted">{earningsSkipped.length} with earnings before expiry listed last</span> : undefined}
             >
               Recommended CSPs
             </SectionTitle>
@@ -284,6 +300,8 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
               ))}
               <span className="ml-auto text-muted">
                 order:{" "}
+                <Link href={qs(view, { sort: "rank" })} className={sortBy === "rank" ? "text-text underline" : "underline"}>trader rank</Link>
+                {" · "}
                 <Link href={qs(view, { sort: "score" })} className={sortBy === "score" ? "text-text underline" : "underline"}>Brief score</Link>
                 {" · "}
                 <Link href={qs(view, { sort: "yield" })} className={sortBy === "yield" ? "text-text underline" : "underline"}>yield</Link>
@@ -303,17 +321,17 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
             )}
             <div className="space-y-2.5 tablet:grid tablet:grid-cols-2 tablet:gap-3 tablet:space-y-0">
               {picks.map((r) => (
-                <PickCard key={r.sym} row={r} fit={fits.get(r.sym) ?? null} P={P} brief={board.get(r.sym) ?? null} />
+                <PickCard key={r.sym} row={r} fit={fits.get(r.sym) ?? null} P={P} brief={board.get(r.sym) ?? null} rank={rankOf(r)} />
               ))}
             </div>
 
             {earningsSkipped.length > 0 && (
               <>
-                <SectionTitle>Set aside: earnings inside the put&apos;s life</SectionTitle>
-                <p className="mb-2 px-1 text-[11px] text-muted">These pay the target but report before the put expires. The backtest never traded through earnings, so they are listed here rather than recommended.</p>
+                <SectionTitle>Earnings inside the put&apos;s life: queued last</SectionTitle>
+                <p className="mb-2 px-1 text-[11px] text-muted">These pay the target but report before the put expires. The backtest traded through earnings (skipping them cost about 15 points a year), so they still qualify; the Auto Trader sells them after the names above when cash is short.</p>
                 <div className="space-y-2.5 tablet:grid tablet:grid-cols-2 tablet:gap-3 tablet:space-y-0">
                   {earningsSkipped.map((r) => (
-                    <PickCard key={r.sym} row={r} fit={fits.get(r.sym) ?? null} P={P} brief={board.get(r.sym) ?? null} />
+                    <PickCard key={r.sym} row={r} fit={fits.get(r.sym) ?? null} P={P} brief={board.get(r.sym) ?? null} rank={rankOf(r)} />
                   ))}
                 </div>
               </>
