@@ -4,7 +4,7 @@
 // Calls / Covered) listing the strongest candidates for each. Bottom: the full
 // approved roster, tinted by each name's dominant signal, with an Edit mode to
 // add/remove tickers (persisted via /api/approved; both app and Python read it).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { VEHICLES, topCandidates, coveredCandidates, dominant, hasData } from "@/lib/research-types";
 import type { ResearchFile, TickerData, Holding } from "@/lib/research-types";
 
@@ -50,6 +50,53 @@ export function ResearchView({
   const [addInput, setAddInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Google Sheet sync: the saved link, the last preview, and a status line.
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ added: string[]; removed: string[] } | null>(null);
+  const [sheetMsg, setSheetMsg] = useState("");
+
+  useEffect(() => {
+    if (!editing) return;
+    fetch("/api/approved/sheet")
+      .then((r) => r.json())
+      .then((j: { source?: { url?: string; syncedAt?: string } | null }) => {
+        if (j.source?.url) setSheetUrl((u) => u || j.source!.url!);
+        setSyncedAt(j.source?.syncedAt ?? null);
+      })
+      .catch(() => {});
+  }, [editing]);
+
+  async function sheet(action: "preview" | "add" | "replace") {
+    if (busy || !sheetUrl.trim()) return;
+    setBusy(true);
+    setSheetMsg("");
+    try {
+      const res = await fetch("/api/approved/sheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, url: sheetUrl.trim() }),
+      });
+      const json = await res.json();
+      if (json.error || json.ok === false) {
+        setSheetMsg(json.error || json.message || "Sync failed");
+        setPreview(null);
+      } else if (action === "preview") {
+        setPreview({ added: json.added ?? [], removed: json.removed ?? [] });
+        if (!json.added?.length && !json.removed?.length) setSheetMsg(`Already matches the sheet (${json.sheet?.length ?? 0} names).`);
+      } else {
+        if (Array.isArray(json.symbols)) setApproved(json.symbols);
+        setPreview(null);
+        setSyncedAt(new Date().toISOString());
+        const parts = [json.added?.length ? `added ${json.added.length}` : "", json.removed?.length ? `removed ${json.removed.length}` : ""].filter(Boolean);
+        setSheetMsg(parts.length ? `Synced: ${parts.join(", ")}.` : "Synced — no changes.");
+      }
+    } catch {
+      setSheetMsg("Couldn't reach the server");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function post(body: Record<string, unknown>) {
     setBusy(true);
@@ -129,6 +176,53 @@ export function ResearchView({
             </button>
           </div>
           {err && <p className="mt-1 px-1 text-[10px] text-rose-400">{err}</p>}
+
+          <div className="mt-2 rounded-lg border border-border bg-surface px-3 py-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium">Sync from a Google Sheet</span>
+              {syncedAt && <span className="text-[10px] text-muted">last synced {new Date(syncedAt).toLocaleDateString()}</span>}
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                value={sheetUrl}
+                onChange={(e) => {
+                  setSheetUrl(e.target.value);
+                  setPreview(null);
+                }}
+                placeholder="https://docs.google.com/spreadsheets/d/…"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[11px] text-text placeholder:text-muted focus:outline-none"
+              />
+              <button
+                onClick={() => sheet("preview")}
+                disabled={busy || !sheetUrl.trim()}
+                className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-sky-200 ring-1 ring-inset ring-sky-500/40 active:bg-sky-500/20 disabled:opacity-50"
+              >
+                Check
+              </button>
+            </div>
+            {preview && (preview.added.length > 0 || preview.removed.length > 0) && (
+              <div className="mt-2 space-y-1 text-[11px]">
+                {preview.added.length > 0 && (
+                  <p><span className="text-emerald-300">+{preview.added.length} new:</span> <span className="text-muted">{preview.added.join(", ")}</span></p>
+                )}
+                {preview.removed.length > 0 && (
+                  <p><span className="text-rose-300">−{preview.removed.length} not in the sheet:</span> <span className="text-muted">{preview.removed.join(", ")}</span></p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  {preview.added.length > 0 && (
+                    <button onClick={() => sheet("add")} disabled={busy} className="rounded-lg bg-sky-500/20 px-2.5 py-1 font-medium text-sky-200 ring-1 ring-inset ring-sky-500/40 active:bg-sky-500/30 disabled:opacity-50">
+                      Add new only
+                    </button>
+                  )}
+                  <button onClick={() => sheet("replace")} disabled={busy} className="rounded-lg px-2.5 py-1 font-medium text-text ring-1 ring-inset ring-border active:bg-surface-2 disabled:opacity-50">
+                    Match the sheet
+                  </button>
+                </div>
+              </div>
+            )}
+            {sheetMsg && <p className="mt-1 text-[10px] text-muted">{sheetMsg}</p>}
+            <p className="mt-1 text-[10px] text-muted">The sheet needs a “Ticker” column and sharing set to anyone with the link.</p>
+          </div>
         </div>
       )}
 
