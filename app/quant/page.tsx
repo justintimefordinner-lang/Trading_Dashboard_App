@@ -5,6 +5,7 @@ import { QuantScanButton } from "@/components/QuantScanButton";
 import { QuantSettings } from "@/components/QuantSettings";
 import { extraMarginFor, readQuantSettings, STUDY_DEFAULTS } from "@/lib/quant-settings";
 import { byTraderRank, rankPick, type QuantRank } from "@/lib/quant-rank";
+import { swapPlan, SWAP_EDGE, type SwapPlan } from "@/lib/quant-swap";
 import { getSnapshot } from "@/lib/snapshot";
 import { accountLabel, COMBINED_ID, getCombineIds, getSelectedAccount } from "@/lib/account";
 import { getVixSnapshot } from "@/lib/vix-data";
@@ -214,6 +215,13 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
   const scanParams = (scan?.meta.params ?? {}) as Partial<Record<(typeof bridgeKeys)[number], number>>;
   const scanStale = !!scan && !example && bridgeKeys.some((k) => scanParams[k] !== undefined && scanParams[k] !== P[k]);
   const fits = new Map(qualifying.map((r) => [r.sym, scan ? quantFit(r, data, cap, P) : null]));
+  // Out of reach: pays the target, but one contract needs more than the room left.
+  // Listed in the trader's order with the cheapest way to fund each.
+  const outOfReach = qualifying
+    .filter((r) => (r.pick?.collateral ?? 0) > cap.room)
+    .sort(traderOrder)
+    .map((r) => ({ r, plan: swapPlan(r, data, cap, P) }))
+    .filter((x): x is { r: QuantRow; plan: SwapPlan } => x.plan !== null);
   const asOf = scan ? new Date(scan.meta.asOf) : null;
   const view = { earnings, cap: band.key, sort: sortBy };
 
@@ -310,7 +318,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
             </div>
             {overBand > 0 && (
               <p className="mb-2 px-1 text-[11px] text-muted">
-                {overBand} more {overBand === 1 ? "name pays" : "names pay"} the target but {overBand === 1 ? "needs" : "need"} more collateral than this band — widen it to see {overBand === 1 ? "it" : "them"}.
+                {overBand} more {overBand === 1 ? "name pays" : "names pay"} the target but {overBand === 1 ? "needs" : "need"} more collateral than this band — {band.key === "fits" ? <>see <span className="text-text">Out of reach</span> below for how to fund {overBand === 1 ? "it" : "them"}</> : <>widen it to see {overBand === 1 ? "it" : "them"}</>}.
               </p>
             )}
             {picks.length === 0 && (
@@ -335,6 +343,69 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
                     <PickCard key={r.sym} row={r} fit={fits.get(r.sym) ?? null} P={P} brief={board.get(r.sym) ?? null} rank={rankOf(r)} />
                   ))}
                 </div>
+              </>
+            )}
+
+            {outOfReach.length > 0 && (
+              <>
+                <SectionTitle>Out of reach: pay the target, need more room</SectionTitle>
+                <p className="mb-2 px-1 text-[11px] text-muted">
+                  One contract needs more than the <Amt>{money0(cap.room)}</Amt> of room left. Each shows the cheapest way to fund it: the open puts with the
+                  least left to earn (winners only). A swap &quot;pays&quot; when the new put beats what those puts still had to earn by {SWAP_EDGE} point per 30 days.
+                  Information, not a rule: in the backtest, closing winners early to redeploy added premium but no return.
+                </p>
+                <Card className="divide-y divide-border px-0 py-0">
+                  {outOfReach.map(({ r, plan }) => {
+                    const p = r.pick!;
+                    const rk = rankOf(r);
+                    return (
+                      <div key={r.sym} className="px-4 py-2.5 text-xs">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                          <span>
+                            <span className="font-semibold" data-ticker={r.sym} title={erTitle(r, p.exp)}>
+                              {r.sym}
+                              <ErMark row={r} exp={p.exp} />
+                            </span>{" "}
+                            <span className="text-muted">${p.strike} put {p.exp.slice(5)} ({p.dte}d) · {p.delta.toFixed(2)}Δ</span>{" "}
+                            {rk && <RankBadge r={rk} />}
+                          </span>
+                          <span className="tabular text-[11px]">
+                            <span className="font-semibold text-emerald-300">{pct(p.yield30, 1)}</span> <span className="text-muted">per 30 days · needs</span> <Amt>{money0(plan.need)}</Amt>{" "}
+                            <span className="text-muted">· short by</span> <Amt>{money0(plan.shortBy)}</Amt>
+                          </span>
+                        </div>
+                        <div className="mt-1 text-[11px] leading-relaxed text-muted">
+                          {plan.blocked === "cap" ? (
+                            <>One contract is over this name&apos;s cap (<Amt>{money0((P.maxPerTicker + P.tickerBand) * cap.buyingPower)}</Amt> with the stretch), so freeing cash elsewhere doesn&apos;t help.</>
+                          ) : plan.legs.length === 0 ? (
+                            <>No winning puts to close. It needs new cash or expiries.</>
+                          ) : (
+                            <>
+                              <span className="text-text">To fund it:</span> close{" "}
+                              {plan.legs.map((l, i) => (
+                                <span key={`${l.symbol}-${l.strike}-${l.expiration}`}>
+                                  {i > 0 && ", "}
+                                  <span className="text-text">{l.contracts} × {l.symbol} ${l.strike}</span> ({Math.round(l.capturedPct * 100)}% captured, {l.dte}d, {pct(l.yield30, 1)}/30d left)
+                                </span>
+                              ))}
+                              . Frees <Amt>{money0(plan.freed)}</Amt> after <Amt>{money0(plan.legs.reduce((s, l) => s + l.buyback, 0))}</Amt> of buybacks
+                              {plan.enough ? "" : <span className="text-amber-300"> — still short by <Amt>{money0(plan.shortBy - plan.freed)}</Amt></span>}.{" "}
+                              {plan.enough && (
+                                <>
+                                  Gives up about <Amt>{money0(plan.give30)}</Amt> per 30 days ({pct(plan.closedYield30, 1)}) for <Amt>{money0(plan.gain30)}</Amt> ({pct(p.yield30, 1)}):{" "}
+                                  <span className={plan.pays ? "font-medium text-emerald-300" : "font-medium text-amber-300"}>
+                                    {plan.pays ? <>pays, about +<Amt>{money0(plan.gain30 - plan.give30)}</Amt> per 30 days</> : "doesn't pay at these prices"}
+                                  </span>
+                                  .
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </Card>
               </>
             )}
 
