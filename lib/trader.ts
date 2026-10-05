@@ -35,6 +35,31 @@ export interface Suggestion {
   accountId?: string;
   /** the account's label, as the notification named it */
   account?: string;
+  /** position in the trader's build for this account; for new puts, the ranked queue order */
+  seq?: number;
+  /** the trader's rank (0–100) for a new put */
+  rank?: number;
+}
+
+// Kinds in the order the page shows them inside each account: new puts first
+// (the user's priority), then closes, covered calls and notes.
+const KIND_ORDER: Record<Suggestion["kind"], number> = { csp: 0, close: 1, cc: 2, note: 3 };
+
+/** Group by account (dashboard order), then kind, then the trader's build position.
+ *  Stable across the day: the 15-minute close checks no longer reshuffle the list. */
+export function orderSuggestions(rows: Suggestion[], accounts: string[] = []): Suggestion[] {
+  const acct = (s: Suggestion) => {
+    const i = s.account ? accounts.indexOf(s.account) : -1;
+    return i === -1 ? accounts.length : i;
+  };
+  return [...rows].sort(
+    (a, b) =>
+      acct(a) - acct(b) ||
+      (a.account ?? "").localeCompare(b.account ?? "") ||
+      KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
+      (a.seq ?? 1e6) - (b.seq ?? 1e6) ||
+      b.lastSeen.localeCompare(a.lastSeen),
+  );
 }
 
 export interface SuggestionsFile {

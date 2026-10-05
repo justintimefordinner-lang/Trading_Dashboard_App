@@ -44,14 +44,32 @@ export function TraderList({ initial }: { initial: Suggestion[] }) {
     }
   }
 
+  // Rows arrive ordered by account, then new puts (ranked queue order), closes, calls, notes.
   const live = rows.filter((s) => s.status === "new");
   const judged = rows.filter((s) => s.status !== "new");
+  // Queue position of each open new put within its account: #1 gets capital first.
+  const queuePos = new Map<string, number>();
+  const seen = new Map<string, number>();
+  for (const s of live) {
+    if (s.kind !== "csp") continue;
+    const n = (seen.get(s.account ?? "") ?? 0) + 1;
+    seen.set(s.account ?? "", n);
+    queuePos.set(s.key, n);
+  }
 
   const Row = ({ s }: { s: Suggestion }) => (
     <Card className={`px-4 py-3 ${s.status === "new" ? "" : "opacity-80"}`}>
       <div className="flex items-baseline justify-between gap-3">
         <div className="min-w-0">
-          <span className={`mr-1.5 inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${KIND_CLS[s.kind]}`}>{KIND_LABEL[s.kind]}</span>
+          <span className={`mr-1.5 inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${KIND_CLS[s.kind]}`}>
+            {KIND_LABEL[s.kind]}
+            {queuePos.has(s.key) && <span className="ml-1 tabular">#{queuePos.get(s.key)}</span>}
+          </span>
+          {s.kind === "csp" && s.rank != null && (
+            <span className="mr-1.5 inline-flex rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium tabular text-muted ring-1 ring-inset ring-border" title="The trader's rank: spread (40%), delta needed to reach the target (35%), IV/RV (25%). Names with earnings inside the put queue after the rest.">
+              rank {Math.round(s.rank)}
+            </span>
+          )}
           {s.account && <span className="mr-1.5 inline-flex rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted ring-1 ring-inset ring-border">{s.account}</span>}
           <span className="text-sm font-semibold" data-ticker={s.symbol !== "—" ? s.symbol : undefined}>{s.title}</span>
         </div>

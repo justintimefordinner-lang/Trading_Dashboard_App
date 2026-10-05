@@ -4,7 +4,7 @@ import { ShowAmounts } from "@/components/privacy";
 import { TraderList } from "@/components/TraderList";
 import { TraderRunButton } from "@/components/TraderRunButton";
 import { PaperTrades } from "@/components/PaperTrades";
-import { readPaper, readSuggestions, traderPresent } from "@/lib/trader";
+import { orderSuggestions, readPaper, readSuggestions, traderPresent } from "@/lib/trader";
 import { Amt } from "@/components/privacy";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -41,7 +41,8 @@ export default async function TraderPage() {
         <Card className="mt-3 px-4 py-3 text-[11px] leading-relaxed text-muted">
           Stage 1: suggestions only. For every account{m?.accounts?.length ? ` (${m.accounts.join(", ")})` : ""} the trader checks puts
           for the 50% close every 15 minutes all session, and at the top of each entry hour ({m?.window ?? "11:00–15:00 ET hourly"}) it
-          re-runs the Quant scan and suggests every new put, covered call and note the rules allow.{" "}
+          re-runs the Quant scan and suggests every new put, covered call and note the rules allow. Each account lists its new puts
+          first, numbered in the order they get capital (no earnings inside the put first, then rank), then closes, calls and notes.{" "}
           <span className="text-emerald-300">Run now</span> does a full pass any time, any day. Anything new goes to your phone, named
           for its account, and is logged here. Mark each one <span className="text-emerald-300">good</span> or{" "}
           <span className="text-rose-300">bad</span> as you review, <span className="text-sky-300">placed it</span> if you traded it
@@ -80,7 +81,7 @@ export default async function TraderPage() {
           </Card>
         )}
         <div className="mt-3">
-          <TraderList initial={doc?.suggestions ?? []} />
+          <TraderList initial={orderSuggestions(doc?.suggestions ?? [], m?.accounts ?? [])} />
         </div>
       </ShowAmounts>
     </main>
