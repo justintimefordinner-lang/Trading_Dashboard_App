@@ -4,7 +4,7 @@ import { ShowAmounts } from "@/components/privacy";
 import { TraderList } from "@/components/TraderList";
 import { TraderRunButton } from "@/components/TraderRunButton";
 import { PaperTrades } from "@/components/PaperTrades";
-import { orderSuggestions, readPaper, readSuggestions, traderPresent } from "@/lib/trader";
+import { describePass, orderSuggestions, readPaper, readSuggestions, traderPresent } from "@/lib/trader";
 import { Amt } from "@/components/privacy";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -49,6 +49,29 @@ export default async function TraderPage() {
           yourself, or <span className="text-text">skip</span> to stop the reminders. That record is what decides when the next stage —
           placing orders after your approval — is ready. Nothing here places a trade.
         </Card>
+        {m?.passes && m.passes.length > 0 && (
+          <Card className="mt-3 px-4 py-3">
+            <details>
+              <summary className="cursor-pointer text-[11px] text-muted">
+                <span className="font-medium text-text">Recent passes</span> · last: {m.passes[m.passes.length - 1].kind === "auto" ? "automatic" : "Run now"},{" "}
+                {describePass(m.passes[m.passes.length - 1])}
+              </summary>
+              <ul className="mt-2 space-y-1 text-[11px] text-muted">
+                {[...m.passes].reverse().map((p, i) => (
+                  <li key={`${p.at}-${i}`} className="flex gap-2">
+                    <span className="w-28 shrink-0 tabular">{new Date(p.at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                    <span className={`w-16 shrink-0 ${p.kind === "auto" ? "" : "text-emerald-300"}`}>{p.kind === "auto" ? "automatic" : "Run now"}</span>
+                    <span className={p.error ? "text-rose-300" : p.waiting ? "text-amber-300" : ""}>{describePass(p)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[10px] leading-relaxed text-muted">
+                Automatic passes run every 15 minutes from 11:00 ET to the close. A suggestion is sent once, then again only after 24 hours or a 15% price move, so a pass
+                with &quot;0 sent&quot; usually means nothing new.
+              </p>
+            </details>
+          </Card>
+        )}
         {pm && (
           <Card className="mt-3 px-4 py-3">
             <div className="flex items-baseline justify-between gap-3">

@@ -62,6 +62,28 @@ export function orderSuggestions(rows: Suggestion[], accounts: string[] = []): S
   );
 }
 
+export interface PassNote {
+  at: string;
+  kind: "auto" | "run now";
+  skipped?: string; // "market closed" / "before 11:00 ET"
+  count?: number; // identical skips in a row
+  waiting?: string; // "scan": the entry slot is open but no fresh Quant scan yet
+  entries?: boolean; // new puts, calls and notes were evaluated
+  pushed?: number;
+  active?: number;
+  paused?: boolean;
+  error?: string;
+}
+
+/** One line for a pass, in plain words. */
+export function describePass(p: PassNote): string {
+  if (p.error) return `failed: ${p.error}`;
+  if (p.skipped) return `skipped, ${p.skipped}${p.count && p.count > 1 ? ` (×${p.count})` : ""}`;
+  const what = p.waiting ? "closes checked; waiting for a fresh Quant scan before new puts" : p.entries ? "closes and new entries checked" : "closes checked";
+  const sent = p.paused ? "paused, nothing sent" : `${p.pushed ?? 0} sent`;
+  return `${what} · ${p.active ?? 0} open · ${sent}`;
+}
+
 export interface SuggestionsFile {
   meta: {
     asOf: string;
@@ -77,6 +99,8 @@ export interface SuggestionsFile {
     /** the last day (ET) the entry half ran */
     entriesBuilt?: string | null;
     lastPass?: "entries" | "closes" | "run now";
+    /** what the recent passes did, oldest first (the trader keeps the last 16) */
+    passes?: PassNote[];
   };
   suggestions: Suggestion[];
 }
