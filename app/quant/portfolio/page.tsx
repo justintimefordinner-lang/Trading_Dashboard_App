@@ -99,7 +99,7 @@ export default async function QuantPortfolioPage() {
           <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">Where the account stands</div>
           <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular sm:grid-cols-4">
             <div><span className="text-muted">Total</span> <Amt>{fmtMoney(cap.totalValue)}</Amt></div>
-            <div><span className="text-muted">Free cash</span> <Amt className={cap.freeCash < 0 ? "text-rose-400" : ""}>{fmtMoney(cap.freeCash)}</Amt></div>
+            <div><span className="text-muted">Room for new puts</span> <Amt>{fmtMoney(cap.room)}</Amt></div>
             <div><span className="text-muted">Collateral</span> <Amt>{fmtMoney(cap.putObligations)}</Amt> <span className="text-muted">CSPs + spread risk</span></div>
             <div><span className="text-muted">Committed</span> <Amt>{fmtMoney(cap.committedTotal)}</Amt> <span className="text-muted">({cap.totalValue ? Math.round((cap.committedTotal / cap.totalValue) * 100) : 0}%)</span></div>
             <div className="col-span-2 text-muted sm:col-span-4">

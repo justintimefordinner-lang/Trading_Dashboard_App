@@ -9,7 +9,7 @@ import { getSnapshot } from "@/lib/snapshot";
 import { accountLabel, COMBINED_ID, getCombineIds, getSelectedAccount } from "@/lib/account";
 import { getVixSnapshot } from "@/lib/vix-data";
 import { assessVix } from "@/lib/vix";
-import { getQuantScan, quantCapacity, quantFit, type QuantFit, type QuantRow, type QuantScan } from "@/lib/quant";
+import { getQuantScan, holdBack, quantCapacity, quantFit, type QuantFit, type QuantRow, type QuantScan } from "@/lib/quant";
 import { cspEarningsFlag, fmtMoney } from "@/lib/calc";
 import { getAmReport } from "@/lib/am-report";
 import type { AmBoardRow } from "@/lib/am-report-types";
@@ -139,7 +139,7 @@ function PickCard({ row, fit, P, brief, rank }: { row: QuantRow; fit: QuantFit |
 // Collateral-per-contract bands for the capital filter. "fits" = what free cash
 // can secure right now, which is usually the question.
 const BANDS: { key: string; label: string; max: (freeCash: number) => number }[] = [
-  { key: "fits", label: "fits free cash", max: (f) => f },
+  { key: "fits", label: "fits the room", max: (f) => f },
   { key: "5k", label: "≤ $5k", max: () => 5_000 },
   { key: "10k", label: "≤ $10k", max: () => 10_000 },
   { key: "25k", label: "≤ $25k", max: () => 25_000 },
@@ -182,7 +182,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
   const rawCap = quantCapacity(data, P.vixMargin ? vix : null, extraMargin);
   const reservePct = P.vixCash && vixSnap ? assessVix(vixSnap).targetReservePct : 0;
   const reserve = reservePct * rawCap.totalValue;
-  const cap = reserve > 0 ? { ...rawCap, freeCash: Math.max(0, rawCap.freeCash - reserve) } : rawCap;
+  const cap = holdBack(rawCap, reserve);
 
   // Order: the Auto Trader's rank by default (spread, cushion, IV/RV — the order it
   // hands out capital), or the Brief's score, or yield.
@@ -201,7 +201,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
 
   // Capital band: collateral per contract against what free cash can secure.
   const band = BANDS.find((b) => b.key === (params.cap ?? "fits")) ?? BANDS[0];
-  const capMax = band.max(Math.max(0, cap.freeCash));
+  const capMax = band.max(cap.room);
 
   const qualifying = scan ? scan.rows.filter((r) => r.pick) : [];
   const inBand = qualifying.filter((r) => (r.pick?.collateral ?? Infinity) <= capMax);
@@ -257,12 +257,13 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
           <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{account.nickname ?? account.mask} · capacity</div>
           <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular sm:grid-cols-4">
             <div><span className="text-muted">Total</span> <Amt>{money0(cap.totalValue)}</Amt></div>
-            <div><span className="text-muted">Free cash</span> <Amt className={cap.freeCash < 0 ? "text-rose-400" : ""}>{money0(cap.freeCash)}</Amt></div>
+            <div><span className="text-muted">Room for new puts</span> <Amt>{money0(cap.room)}</Amt></div>
             <div><span className="text-muted">Collateral</span> <Amt>{money0(cap.putObligations)}</Amt> <span className="text-muted">CSPs + spread risk</span></div>
             <div><span className="text-muted">Per-name cap</span> <Amt>{money0((P?.maxPerTicker ?? 0.1) * cap.buyingPower)}</Amt></div>
             <div className="col-span-2 sm:col-span-4 text-muted">
               VIX {vix != null ? vix.toFixed(1) : "—"} → margin allowance {P.vixMargin ? `${Math.round(cap.margin * 100)}%` : "off (Settings)"}
               {cap.extraMargin > 0 && <> · extra margin <Amt>{money0(cap.extraMargin)}</Amt></>} · buying power <Amt>{money0(cap.buyingPower)}</Amt>
+              {(cap.marginUsed > 0 || cap.extraMargin > 0) && <> · margin in use <Amt>{money0(cap.marginUsed)}</Amt>{cap.margin * cap.totalValue + cap.extraMargin > 0 && <> of <Amt>{money0(cap.margin * cap.totalValue + cap.extraMargin)}</Amt> allowed</>}</>}
               {reserve > 0 && (
                 <>
                   {" "}· VIX cash reserve {Math.round(reservePct * 100)}% (<Amt>{money0(reserve)}</Amt>) held back
@@ -295,7 +296,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
                   href={qs(view, { cap: b.key })}
                   className={`rounded-full px-2 py-0.5 ring-1 ring-inset ${b.key === band.key ? "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30" : "bg-surface-2 text-muted ring-border"}`}
                 >
-                  {b.key === "fits" ? `${b.label} (${money0(Math.max(0, cap.freeCash))})` : b.label}
+                  {b.key === "fits" ? `${b.label} (${money0(cap.room)})` : b.label}
                 </Link>
               ))}
               <span className="ml-auto text-muted">

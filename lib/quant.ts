@@ -106,6 +106,8 @@ export interface QuantCapacity {
   putObligations: number;
   committedTotal: number;
   freeCash: number; // uncommitted cash + the margin allowance + extra margin
+  marginUsed: number; // $ committed beyond the account's value (Home's "used margin")
+  room: number; // $ new puts can actually take: the smaller of free cash and what is left under buying power
 }
 
 export function vixMargin(vix: number | null): number {
@@ -127,17 +129,31 @@ export function quantCapacity(data: AccountData, vix: number | null, extraMargin
   // less everything deployed (shares, LEAPS, collateral, spread risk), plus
   // money-market sweep funds, which Schwab reports as a holding rather than cash.
   const free = freeCashValue(data.summary, data.equities, data.options);
+  const buyingPower = totalValue * (1 + margin) + extra;
+  const committedTotal = capitalCommitted(data.options, data.equities);
+  const freeCash = free + margin * totalValue + extra;
   return {
     totalValue,
     cash: free + putObligations, // cash on hand, including what already secures the puts
     vix,
     margin,
     extraMargin: extra,
-    buyingPower: totalValue * (1 + margin) + extra,
+    buyingPower,
     putObligations,
-    committedTotal: capitalCommitted(data.options, data.equities),
-    freeCash: free + margin * totalValue + extra,
+    committedTotal,
+    freeCash,
+    marginUsed: Math.max(0, committedTotal - totalValue),
+    // Margin already in use counts against the allowances: an account $97k past its
+    // value with a $117k extra-margin limit has $20k of room, not $117k.
+    room: Math.max(0, Math.min(freeCash, buyingPower - committedTotal)),
   };
+}
+
+/** Hold back a cash reserve (the VIX cash allocation) from what can be deployed. */
+export function holdBack(cap: QuantCapacity, reserve: number): QuantCapacity {
+  if (reserve <= 0) return cap;
+  const freeCash = Math.max(0, cap.freeCash - reserve);
+  return { ...cap, freeCash, room: Math.max(0, Math.min(freeCash, cap.buyingPower - cap.committedTotal)) };
 }
 
 export function quantFit(row: QuantRow, data: AccountData, cap: QuantCapacity, params: QuantScan["meta"]["params"]): QuantFit | null {

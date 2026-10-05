@@ -15,7 +15,7 @@
 //   * capital that isn't working: put it into a name the scan says pays
 import type { AccountData, CoveredCallQuote } from "./types";
 import { capturedPct, daysToExpiry } from "./calc";
-import { capitalCommitted, quantCapacity, quantFit, type QuantCapacity, type QuantScan } from "./quant";
+import { capitalCommitted, holdBack, quantCapacity, quantFit, type QuantCapacity, type QuantScan } from "./quant";
 import { byTraderRank } from "./quant-rank";
 
 export type Urgency = "act" | "income" | "deploy" | "note";
@@ -72,7 +72,7 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
   const perName = sizing.maxPerTicker ?? R.maxPerTicker;
   const band = sizing.tickerBand ?? R.tickerBand;
   const rawCap = quantCapacity(data, vix, sizing.extraMargin ?? 0);
-  const cap = reservePct > 0 ? { ...rawCap, freeCash: Math.max(0, rawCap.freeCash - reservePct * rawCap.totalValue) } : rawCap;
+  const cap = holdBack(rawCap, reservePct * rawCap.totalValue);
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   const actions: QuantAction[] = [];
   const compliant: string[] = [];
@@ -232,7 +232,7 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
 
   // 6. Idle capital: what the scan says would fit, in the trader's order (names
   // with earnings inside the put's life last, then its rank).
-  if (scan && cap.freeCash > 0) {
+  if (scan && cap.room > 0) {
     const sizingParams = { ...scan.meta.params, maxPerTicker: perName, tickerBand: band };
     const fits = scan.rows
       .filter((r) => r.pick)
@@ -245,9 +245,9 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
         urgency: "deploy",
         rule: "4% target",
         symbol: best.r.sym,
-        title: `${money(cap.freeCash)} free: ${fits.length} scan pick${fits.length === 1 ? "" : "s"} fit`,
+        title: `${money(cap.room)} of room: ${fits.length} scan pick${fits.length === 1 ? "" : "s"} fit`,
         detail: `First in the trader's queue is ${best.r.sym} $${best.r.pick!.strike} ${best.r.pick!.exp.slice(5)} at ${best.r.pick!.yield30.toFixed(1)}% per 30 days (${best.fit!.contracts} contract${best.fit!.contracts === 1 ? "" : "s"}).`,
-        amount: cap.freeCash,
+        amount: cap.room,
         href: "/quant",
         linkLabel: "(Click to view scan results)",
       });
