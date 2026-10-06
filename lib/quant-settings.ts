@@ -20,6 +20,7 @@ export interface QuantParams {
   expMin: number; // days to expiry, inclusive
   expMax: number;
   expTarget: number; // use the expiration closest to this many days; 0 = best put across the window
+  maxSpread: number; // skip quotes whose (ask − bid) / mid is above this (0.5 = 50%); backtested neutral at 50%, tighter costs return
   closeAtPct: number; // close a put once this % of the credit is captured
   maxPerTicker: number; // of buying power (0.10 = 10%)
   tickerBand: number; // stretch allowed for one more contract (0.05 = 5%)
@@ -39,6 +40,7 @@ export const STUDY_DEFAULTS: QuantParams = {
   expMin: 28,
   expMax: 42,
   expTarget: 35, // the backtest used the expiration closest to 35 days (±7)
+  maxSpread: 0.5,
   closeAtPct: 50,
   maxPerTicker: 0.1,
   tickerBand: 0.05,
@@ -48,7 +50,7 @@ export const STUDY_DEFAULTS: QuantParams = {
 };
 
 /** The rule's own variables (not sizing): what makes a scan "custom". */
-export const RULE_KEYS = ["targetYield", "yieldDays", "maxDelta", "expMin", "expMax", "expTarget", "closeAtPct"] as const;
+export const RULE_KEYS = ["targetYield", "yieldDays", "maxDelta", "expMin", "expMax", "expTarget", "maxSpread", "closeAtPct"] as const;
 
 /** Extra margin set for one account, in dollars (0 when none). */
 export function extraMarginFor(params: QuantParams, accountId: string | null | undefined): number {
@@ -65,6 +67,7 @@ const RANGES: Record<NumericKey, [number, number]> = {
   expMin: [1, 180],
   expMax: [1, 180],
   expTarget: [0, 180],
+  maxSpread: [0.05, 9.99],
   closeAtPct: [10, 95],
   maxPerTicker: [0.01, 0.5],
   tickerBand: [0, 0.25],

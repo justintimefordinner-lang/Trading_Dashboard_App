@@ -17,6 +17,7 @@ const FIELDS: Field[] = [
   { key: "expMin", label: "Shortest expiry", hint: "days out", scale: 1, step: 1, min: 1, max: 180 },
   { key: "expMax", label: "Longest expiry", hint: "days out", scale: 1, step: 1, min: 1, max: 180 },
   { key: "expTarget", label: "Target expiry", hint: "closest expiry to this; 0 = any in the window", scale: 1, step: 1, min: 0, max: 180 },
+  { key: "maxSpread", label: "Max spread", hint: "% of the mid; wider quotes are skipped", scale: 100, step: 5, min: 5, max: 999 },
   { key: "closeAtPct", label: "Close at", hint: "% of the credit captured", scale: 1, step: 5, min: 10, max: 95 },
   { key: "maxPerTicker", label: "Max per name", hint: "% of buying power", scale: 100, step: 1, min: 1, max: 50 },
   { key: "tickerBand", label: "Stretch", hint: "% more for one extra contract", scale: 100, step: 1, min: 0, max: 25 },

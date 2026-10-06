@@ -52,7 +52,8 @@ export interface QuantRow {
   price: number | null;
   pick: QuantContract | null; // the contract the rule would sell
   best: QuantContract | null; // richest contract under the delta cap (the closest miss)
-  reason: "ok" | "low" | "no_puts" | "no_chain" | string;
+  reason: "ok" | "low" | "no_puts" | "no_chain" | "wide" | string;
+  wide?: number; // candidates skipped for a spread over the max
   erDate: string | null;
   erDays: number | null;
   erInWindow: boolean;
@@ -64,7 +65,7 @@ export interface QuantScan {
     marketOpen: boolean | null;
     universe: number;
     qualifying: number;
-    params: { targetYield: number; yieldDays: number; maxDelta: number; expMin: number; expMax: number; expTarget?: number; closeAtPct: number; maxPerTicker: number; tickerBand: number };
+    params: { targetYield: number; yieldDays: number; maxDelta: number; expMin: number; expMax: number; expTarget?: number; maxSpread?: number; closeAtPct: number; maxPerTicker: number; tickerBand: number };
     source: string;
     elapsedSec?: number;
   };
@@ -214,7 +215,7 @@ function exampleQuantScan(): QuantScan {
   });
   rows.sort((a, b) => Number(!!b.pick) - Number(!!a.pick) || (b.pick ?? b.best)!.yield30 - (a.pick ?? a.best)!.yield30);
   return {
-    meta: { asOf: new Date().toISOString(), marketOpen: true, universe: rows.length, qualifying: rows.filter((r) => r.pick).length, params: { targetYield: 0.04, yieldDays: 30, maxDelta: 0.35, expMin: 28, expMax: 42, expTarget: 35, closeAtPct: 50, maxPerTicker: 0.1, tickerBand: 0.05 }, source: "example" },
+    meta: { asOf: new Date().toISOString(), marketOpen: true, universe: rows.length, qualifying: rows.filter((r) => r.pick).length, params: { targetYield: 0.04, yieldDays: 30, maxDelta: 0.35, expMin: 28, expMax: 42, expTarget: 35, maxSpread: 0.5, closeAtPct: 50, maxPerTicker: 0.1, tickerBand: 0.05 }, source: "example" },
     rows,
   };
 }

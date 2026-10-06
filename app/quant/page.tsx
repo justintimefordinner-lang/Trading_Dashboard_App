@@ -211,7 +211,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
   const earningsSkipped = (skipEarnings ? inBand.filter((r) => r.erInWindow) : []).sort(byScore);
   const misses = scan ? scan.rows.filter((r) => !r.pick) : [];
   // Settings that reach the bridge (the VIX toggle is this page's alone): stale when the scan on file used other values.
-  const bridgeKeys = ["targetYield", "yieldDays", "maxDelta", "expMin", "expMax", "expTarget", "closeAtPct"] as const;
+  const bridgeKeys = ["targetYield", "yieldDays", "maxDelta", "expMin", "expMax", "expTarget", "maxSpread", "closeAtPct"] as const;
   const scanParams = (scan?.meta.params ?? {}) as Partial<Record<(typeof bridgeKeys)[number], number>>;
   const scanStale = !!scan && !example && bridgeKeys.some((k) => scanParams[k] !== undefined && scanParams[k] !== P[k]);
   const fits = new Map(qualifying.map((r) => [r.sym, scan ? quantFit(r, data, cap, P) : null]));
@@ -253,7 +253,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
           </div>
           <ul className="mt-2 space-y-1 text-xs text-muted">
             <li>· Sell the <span className="text-text">lowest-delta</span> put paying <span className="text-text">≥ {(P.targetYield * 100).toFixed(1).replace(/\.0$/, "")}% of the strike per {P.yieldDays} days</span> (at the mid), never above <span className="text-text">{P.maxDelta} delta</span>.</li>
-            <li>· {P.expTarget ? <>The expiration <span className="text-text">closest to {P.expTarget} days</span> ({P.expMin}–{P.expMax} days out)</> : <>Any expiration <span className="text-text">{P.expMin}–{P.expMax} days</span> out</>}; ties go to the higher yield. Skip the name if nothing pays.</li>
+            <li>· {P.expTarget ? <>The expiration <span className="text-text">closest to {P.expTarget} days</span> ({P.expMin}–{P.expMax} days out)</> : <>Any expiration <span className="text-text">{P.expMin}–{P.expMax} days</span> out</>}; ties go to the higher yield. Skip the name if nothing pays, and skip any quote wider than <span className="text-text">{Math.round(P.maxSpread * 100)}% of the mid</span> (a 143% spread has no real midpoint).</li>
             <li>· <span className="text-text">Close at {P?.closeAtPct ?? 50}%</span> of the credit, even late in the put&apos;s life. Take assignment; buy a ~0.75Δ LEAPS on it.</li>
             <li>· Up to <span className="text-text">{P ? Math.round(P.maxPerTicker * 100) : 10}% of buying power per name</span> (a {P ? Math.round((P.maxPerTicker + P.tickerBand) * 100) : 15}% stretch allocation lets one more contract on when a name is under its cap). {P.vixMargin ? "Margin allowance scales with the VIX: 0 under 20, then 5% per 5 points, capped at 35%." : "VIX margin allowance off: cash-secured only (the study used the allowance)."}</li>
             <li>· When cash is short, names go in the <span className="text-text">Auto Trader&apos;s order</span>: no earnings inside the put first, then its rank. The trader sells the study&apos;s pick and follows these sizing settings.</li>
@@ -425,6 +425,8 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
                       <span className="text-right text-[11px] text-muted tabular">
                         {r.reason === "low" && r.best
                           ? <>best under {P?.maxDelta ?? 0.35}Δ: ${r.best.strike} {r.best.exp.slice(5)} at <span className="text-text">{pct(r.best.yield30)}</span> per 30 days ({r.best.delta.toFixed(2)}Δ)</>
+                          : r.reason === "wide"
+                            ? `only quotes wider than ${Math.round(P.maxSpread * 100)}% of the mid (${r.wide ?? 0} skipped)`
                           : r.reason === "no_puts"
                             ? "no puts in the window"
                             : r.reason === "no_chain"
