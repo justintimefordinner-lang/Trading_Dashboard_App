@@ -10,7 +10,7 @@ import { getSnapshot } from "@/lib/snapshot";
 import { accountLabel, COMBINED_ID, getCombineIds, getSelectedAccount } from "@/lib/account";
 import { getVixSnapshot } from "@/lib/vix-data";
 import { assessVix } from "@/lib/vix";
-import { getQuantScan, holdBack, quantCapacity, quantFit, type QuantFit, type QuantRow, type QuantScan } from "@/lib/quant";
+import { fillLabel, getQuantScan, holdBack, quantCapacity, quantFit, type QuantFit, type QuantRow, type QuantScan } from "@/lib/quant";
 import { cspEarningsFlag, fmtMoney } from "@/lib/calc";
 import { getAmReport } from "@/lib/am-report";
 import type { AmBoardRow } from "@/lib/am-report-types";
@@ -101,7 +101,7 @@ function PickCard({ row, fit, P, brief, rank }: { row: QuantRow; fit: QuantFit |
         </div>
         <div className="shrink-0 text-right">
           <div className="text-sm font-semibold text-emerald-300">{pct(p.yield30, 1)} <span className="text-[10px] font-medium text-emerald-300/70">per 30 days</span></div>
-          <div className="text-[10px] text-muted">{pct((p.mark / p.strike) * 100, 1)} for this {p.dte}-day put · target {P ? (P.targetYield * 100).toFixed(0) : 4}% per 30</div>
+          <div className="text-[10px] text-muted">{pct(((p.fill ?? p.mark) / p.strike) * 100, 1)} for this {p.dte}-day put at {fillLabel(p)} · target {P ? (P.targetYield * 100).toFixed(0) : 4}% per 30</div>
         </div>
       </div>
 
@@ -109,11 +109,11 @@ function PickCard({ row, fit, P, brief, rank }: { row: QuantRow; fit: QuantFit |
         <div><span className="text-muted">Sell</span> <span className="text-text">${p.strike} put</span></div>
         <div><span className="text-muted">Exp</span> <span className="text-text">{p.exp.slice(5)}</span> <span className="text-muted">({p.dte}d)</span></div>
         <div><span className="text-muted">Δ</span> <span className="text-text">{p.delta.toFixed(2)}</span></div>
-        <div><span className="text-muted">Mid</span> <span className="text-text">${p.mark.toFixed(2)}</span> <span className="text-muted">({p.bid.toFixed(2)}–{p.ask.toFixed(2)})</span></div>
+        <div><span className="text-muted">{p.basis === "bid" ? "Bid" : p.basis === "quarter" ? "¼ up" : "Mid"}</span> <span className="text-text">${(p.fill ?? p.mark).toFixed(2)}</span> <span className="text-muted">({p.bid.toFixed(2)}–{p.ask.toFixed(2)})</span></div>
         <div><span className="text-muted">Below</span> <span className="text-text">{p.belowSpotPct != null ? pct(p.belowSpotPct) : "—"}</span></div>
         <div><span className="text-muted">OI</span> <span className="text-text">{p.oi.toLocaleString()}</span></div>
         <div><span className="text-muted">Spread</span> <span className={p.spreadPct != null && p.spreadPct > 15 ? "text-amber-300" : "text-text"}>{p.spreadPct != null ? pct(p.spreadPct, 0) : "—"}</span></div>
-        <div><span className="text-muted">Close at</span> <span className="text-text">${(p.mark / 2).toFixed(2)}</span></div>
+        <div><span className="text-muted">Close at</span> <span className="text-text">${((p.fill ?? p.mark) / 2).toFixed(2)}</span></div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -252,7 +252,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
             {scanStale && <span className="text-[11px] text-amber-300">· the scan on file used other values — press Scan now</span>}
           </div>
           <ul className="mt-2 space-y-1 text-xs text-muted">
-            <li>· Sell the <span className="text-text">lowest-delta</span> put paying <span className="text-text">≥ {(P.targetYield * 100).toFixed(1).replace(/\.0$/, "")}% of the strike per {P.yieldDays} days</span> (at the mid), never above <span className="text-text">{P.maxDelta} delta</span>.</li>
+            <li>· Sell the <span className="text-text">lowest-delta</span> put paying <span className="text-text">≥ {(P.targetYield * 100).toFixed(1).replace(/\.0$/, "")}% of the strike per {P.yieldDays} days</span>, never above <span className="text-text">{P.maxDelta} delta</span>. The premium is judged at the price a limit order can expect: <span className="text-text">the mid</span> when the spread is up to 10% of it, <span className="text-text">a quarter of the way from bid to ask</span> at 10–30%, <span className="text-text">the bid</span> above 30%.</li>
             <li>· {P.expTarget ? <>The expiration <span className="text-text">closest to {P.expTarget} days</span> ({P.expMin}–{P.expMax} days out)</> : <>Any expiration <span className="text-text">{P.expMin}–{P.expMax} days</span> out</>}; ties go to the higher yield. Skip the name if nothing pays, and skip any quote wider than <span className="text-text">{Math.round(P.maxSpread * 100)}% of the mid</span> (a 143% spread has no real midpoint).</li>
             <li>· <span className="text-text">Close at {P?.closeAtPct ?? 50}%</span> of the credit, even late in the put&apos;s life. Take assignment; buy a ~0.75Δ LEAPS on it.</li>
             <li>· Up to <span className="text-text">{P ? Math.round(P.maxPerTicker * 100) : 10}% of buying power per name</span> (a {P ? Math.round((P.maxPerTicker + P.tickerBand) * 100) : 15}% stretch allocation lets one more contract on when a name is under its cap). {P.vixMargin ? "Margin allowance scales with the VIX: 0 under 20, then 5% per 5 points, capped at 35%." : "VIX margin allowance off: cash-secured only (the study used the allowance)."}</li>
@@ -442,7 +442,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
         )}
 
         <p className="mt-4 px-1 text-[11px] leading-relaxed text-muted">
-          Yields use the mid price, about where a working limit order fills; the bid–ask is shown beside it. Nothing here places a trade. The backtest&apos;s basket was
+          Yields use the price a limit order can expect for the quote&apos;s width (mid, a quarter up from the bid, or the bid); the bid–ask is shown beside it. Nothing here places a trade. The backtest&apos;s basket was
           picked with hindsight, so treat the rule as a filter for names you already approve of, not a forecast; without the study&apos;s
           five biggest winners, its returns roughly halved.
         </p>

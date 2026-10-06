@@ -28,17 +28,24 @@ export function capitalCommitted(options: OptionPosition[], equities: Equity[]):
 }
 import { EXAMPLE_CLOSES, EXAMPLE_EARNINGS, lastClose } from "./example-market";
 
+/** Where a pick's price was judged, in words. */
+export function fillLabel(p: { basis?: string }): string {
+  return p.basis === "bid" ? "the bid" : p.basis === "quarter" ? "¼ of the way from bid to ask" : "the mid";
+}
+
 export interface QuantContract {
   exp: string;
   dte: number;
   strike: number;
   bid: number;
   ask: number;
-  mark: number;
+  mark: number; // the midpoint
+  fill?: number; // the price the yield is judged at: mid (spread ≤10%), a quarter from bid to ask (10–30%), the bid (30%+)
+  basis?: "mid" | "quarter" | "bid";
   delta: number;
-  yield30: number; // % of strike per 30 days, at the mid
+  yield30: number; // % of strike per 30 days, at the fill
   annPct: number;
-  premium: number; // $ per contract at the mid
+  premium: number; // $ per contract at the fill
   collateral: number;
   oi: number;
   volume: number;
@@ -201,7 +208,7 @@ function exampleQuantScan(): QuantScan {
     const mark = Math.round(((yield30 / 100) * strike * dte) / 30 * 100) / 100;
     const bid = Math.round((mark - 0.03) * 100) / 100;
     const contract: QuantContract = {
-      exp: exp(dte), dte, strike, bid, ask: Math.round((mark + 0.03) * 100) / 100, mark,
+      exp: exp(dte), dte, strike, bid, ask: Math.round((mark + 0.03) * 100) / 100, mark, fill: mark, basis: "mid",
       delta: Math.round((0.22 + ((i * 5) % 13) / 100) * 1000) / 1000,
       yield30: Math.round(yield30 * 100) / 100, annPct: Math.round((mark / strike) * (365 / dte) * 1000) / 10,
       premium: Math.round(mark * 100 * 100) / 100, collateral: strike * 100, oi: 1200 + ((i * 917) % 9000), volume: 80 + ((i * 131) % 700),
