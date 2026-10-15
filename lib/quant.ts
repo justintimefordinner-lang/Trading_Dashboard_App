@@ -77,6 +77,8 @@ export interface QuantScan {
     elapsedSec?: number;
   };
   rows: QuantRow[];
+  /** the put side of the hedge symbol (SMH) for the portfolio hedge; absent on older scans */
+  hedge?: { sym: string; price: number; puts: { exp: string; dte: number; strike: number; bid: number; ask: number; mark: number; delta: number | null; oi?: number; belowSpotPct?: number | null }[] } | null;
 }
 
 export const QUANT_PATH = path.join(process.cwd(), "data", "quant-scan.json");

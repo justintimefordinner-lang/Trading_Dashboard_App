@@ -13,6 +13,7 @@ import { assessVix } from "@/lib/vix";
 import { fillLabel, getQuantScan, holdBack, quantCapacity, quantFit, type QuantFit, type QuantRow, type QuantScan } from "@/lib/quant";
 import { cspEarningsFlag, fmtMoney } from "@/lib/calc";
 import { getAmReport } from "@/lib/am-report";
+import { HEDGE, hedgeStatus } from "@/lib/quant-hedge";
 import type { AmBoardRow } from "@/lib/am-report-types";
 
 export const dynamic = "force-dynamic";
@@ -188,6 +189,8 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
   const reservePct = P.vixCash && vixSnap ? assessVix(vixSnap).targetReservePct : 0;
   const reserve = reservePct * rawCap.totalValue;
   const cap = holdBack(rawCap, reserve);
+  // The portfolio hedge for this account: its high-water mark from the value history, the SMH chain from the scan.
+  const hedge = hedgeStatus(data, scan?.hedge ?? null, vix, cap.room);
 
   // Order: the Auto Trader's rank by default (spread, cushion, IV/RV — the order it
   // hands out capital), or the Brief's score, or yield.
@@ -283,6 +286,39 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
               )}
             </div>
           </div>
+        </Card>
+
+        {/* The portfolio hedge: where the rule stands for this account (the Trader suggests the same thing). */}
+        <Card className="mt-3 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Pill className={`shrink-0 whitespace-nowrap ${hedge.pick ? "bg-violet-500/10 text-violet-300 ring-violet-500/20" : "bg-surface-2 text-muted ring-border"}`}>Portfolio hedge</Pill>
+            <span className="text-[11px] text-muted">
+              {HEDGE.sym} puts ~{Math.round(HEDGE.otm * 100)}% below spot, {HEDGE.dteLo}–{HEDGE.dteHi} days out, half of committed capital, bought at a portfolio high with the VIX under {HEDGE.vixMax}; sold at {HEDGE.tp}× cost or {HEDGE.closeDte} days before expiry; nothing rebought until the next high.
+            </span>
+          </div>
+          <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular sm:grid-cols-4">
+            <div><span className="text-muted">High-water mark</span> <Amt>{money0(hedge.high)}</Amt></div>
+            <div><span className="text-muted">Today</span> <Amt>{money0(hedge.totalValue)}</Amt> <span className="text-muted">{hedge.dd < 0 ? `${(hedge.dd * 100).toFixed(1)}%` : "at the high"}</span></div>
+            <div><span className="text-muted">Committed</span> <Amt>{money0(hedge.committed)}</Amt> <span className="text-muted">{Math.round(hedge.invested * 100)}% of the account</span></div>
+            <div><span className="text-muted">Hedge on</span> <Amt>{money0(hedge.live)}</Amt> <span className="text-muted">of <Amt>{money0(hedge.target)}</Amt> wanted</span></div>
+          </div>
+          {hedge.pick ? (
+            <p className="mt-2 text-xs text-text">
+              Buy {hedge.pick.contracts} × {HEDGE.sym} ${hedge.pick.strike} put ({hedge.pick.exp.slice(5)}, {hedge.pick.dte}d) near {hedge.pick.ask.toFixed(2)}: <Amt>{money0(hedge.pick.cost)}</Amt> for <Amt>{money0(hedge.pick.notional)}</Amt> of notional.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-muted">{hedge.blockers.length ? `Nothing to buy: ${hedge.blockers.join("; ")}.` : "Nothing to buy right now."}</p>
+          )}
+          {hedge.lots.length > 0 && (
+            <ul className="mt-2 space-y-0.5 text-[11px] text-muted">
+              {hedge.lots.map((l) => (
+                <li key={`${l.strike}-${l.expiration}`}>
+                  · {l.qty} × {HEDGE.sym} ${l.strike} put ({l.expiration.slice(5)}, {l.dte}d): {l.ratio.toFixed(2)}× cost
+                  {l.exit === "take profit" ? <span className="text-emerald-300"> — sell, at the {HEDGE.tp}× target</span> : l.exit === "expiry" ? <span className="text-amber-300"> — sell, inside {HEDGE.closeDte} days of expiry</span> : " — hold"}
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
 
         {!scan && (
