@@ -150,18 +150,20 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
   }
   if (committedBy.size && !over) compliant.push(`No name is above ${pct(perName + band)} of buying power.`);
 
-  // 4. Covered calls on shares (≥100, no call already on).
+  // 4. Covered calls on shares: one per 100 shares, less the calls already on.
   const calledBy = bySymbol(shortCalls);
   for (const [sym, lots] of eqBySym) {
     const shares = lots.reduce((s, e) => s + e.qty, 0);
     if (shares < 100) continue;
-    if (calledBy.has(sym)) continue;
+    const sold = (calledBy.get(sym) ?? []).reduce((s, o) => s + o.qty, 0);
+    const contracts = Math.floor(shares / 100) - sold;
+    if (contracts <= 0) continue;
     const eq = lots[0];
     const basis = lots.reduce((s, e) => s + e.qty * e.avgCost, 0) / shares;
     const ladder = (eq.coveredCalls ?? []).filter((c) => c.dte >= R.callMinDte && c.dte <= R.callMaxDte && c.strike >= basis);
     const weekly = (c: CoveredCallQuote) => c.mark / basis / (c.dte / 7);
     const ok = ladder.filter((c) => weekly(c) >= R.callWeeklyMin);
-    const contracts = Math.floor(shares / 100);
+    const already = sold ? `${shares} shares with ${sold} call${sold === 1 ? "" : "s"} already on. ` : "";
     if (ok.length) {
       const top = Math.max(...ok.map((c) => c.strike));
       const pick = ok.filter((c) => c.strike === top).sort((a, b) => weekly(b) - weekly(a))[0];
@@ -170,7 +172,7 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
         rule: "covered call",
         symbol: sym,
         title: `Sell ${contracts} × ${sym} $${pick.strike} call, ${pick.dte}d`,
-        detail: `Furthest strike at or above your $${basis.toFixed(2)} basis still paying ${(weekly(pick) * 100).toFixed(2)}% of basis per week (${pick.mark.toFixed(2)} × 100). ${pick.delta ? `${pick.delta.toFixed(2)}Δ.` : ""} Let it expire or be called; the wheel goes back to cash.`,
+        detail: `${already}Furthest strike at or above your $${basis.toFixed(2)} basis still paying ${(weekly(pick) * 100).toFixed(2)}% of basis per week (${pick.mark.toFixed(2)} × 100). ${pick.delta ? `${pick.delta.toFixed(2)}Δ.` : ""} Let it expire or be called; the wheel goes back to cash.`,
         amount: pick.mark * 100 * contracts,
       });
     } else if (eq.price < basis) {
@@ -178,8 +180,8 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
         urgency: "note",
         rule: "covered call",
         symbol: sym,
-        title: `${sym}: hold without a call`,
-        detail: `Price $${eq.price.toFixed(2)} is under your $${basis.toFixed(2)} basis and no 7–21 day call above basis pays 0.5%/week. The study waits rather than selling below cost.`,
+        title: `${sym}: hold without ${sold ? "another" : "a"} call`,
+        detail: `${already}Price $${eq.price.toFixed(2)} is under your $${basis.toFixed(2)} basis and no 7–21 day call above basis pays 0.5%/week. The study waits rather than selling below cost.`,
       });
     } else if (!eq.coveredCalls?.length) {
       actions.push({
@@ -187,7 +189,7 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
         rule: "covered call",
         symbol: sym,
         title: `${sym}: no call ladder on file`,
-        detail: `${shares} shares with no call on; the bridge hasn't priced calls for it yet (it does during market hours).`,
+        detail: `${shares} shares with ${sold ? `only ${sold} call${sold === 1 ? "" : "s"}` : "no call"} on; the bridge hasn't priced calls for it yet (it does during market hours).`,
       });
     }
   }
