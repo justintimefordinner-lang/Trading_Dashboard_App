@@ -192,19 +192,24 @@ export function checkPortfolio(data: AccountData, vix: number | null, scan: Quan
     }
   }
 
-  // 5. LEAPS on assignment.
-  const leapsBy = bySymbol(longCalls);
+  // 5. LEAPS on assignment: one per 100 shares. A long call inside the holding
+  // floor doesn't count (it gets its own "roll" card below), nor does a short-dated
+  // one such as a debit spread's long leg.
+  const leapsBy = bySymbol(longCalls.filter((o) => daysToExpiry(o.expiration) > R.leapsMinDteToHold));
   for (const [sym, lots] of eqBySym) {
     const shares = lots.reduce((s, e) => s + e.qty, 0);
     if (shares < 100) continue;
-    if (leapsBy.has(sym)) continue;
+    const want = Math.floor(shares / 100);
+    const held = (leapsBy.get(sym) ?? []).reduce((s, o) => s + o.qty, 0);
+    const need = want - held;
+    if (need <= 0) continue;
     const price = lots[0].price;
     actions.push({
       urgency: "income",
       rule: "LEAPS on shares",
       symbol: sym,
-      title: `Buy ${Math.floor(shares / 100)} × ${sym} ~${R.leapsDelta.toFixed(2)}Δ call, ~${R.leapsDte} days out`,
-      detail: `Shares held with no long call under them. The study pairs each 100 assigned shares with a deep call to keep upside while the shares get called away (it added $503k over the full backtest). Well in the money: a strike around $${Math.round(price * 0.72 / (price < 100 ? 1 : 5)) * (price < 100 ? 1 : 5)} at today's price.`,
+      title: `Buy ${need} × ${sym} ~${R.leapsDelta.toFixed(2)}Δ call, ~${R.leapsDte} days out`,
+      detail: `${held ? `${shares} shares with ${held} LEAPS under them; the study holds ${want}. ` : "Shares held with no long call under them. "}The study pairs each 100 assigned shares with a deep call to keep upside while the shares get called away (it added $503k over the full backtest). Well in the money: a strike around $${Math.round(price * 0.72 / (price < 100 ? 1 : 5)) * (price < 100 ? 1 : 5)} at today's price.`,
     });
   }
   for (const o of longCalls) {
