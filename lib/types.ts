@@ -311,6 +311,7 @@ export interface ClosedStock {
   annualized: number; // decimal
   manualBasis?: boolean; // the cost came from the user (manual_cost_basis.json), not from Schwab's feeds
   manualEntry?: boolean; // the whole sale was added by hand (manual_stock_sales.json)
+  schwabLots?: boolean; // cost taken from the lots Schwab sold (stock_lot_overrides.json), not first-in-first-out
 }
 
 export interface ClosedStockFile {

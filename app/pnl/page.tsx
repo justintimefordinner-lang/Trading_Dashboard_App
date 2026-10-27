@@ -54,7 +54,7 @@ export default async function PnlPage() {
     { key: "covered", label: "Covered calls", items: coveredF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
     { key: "spread", label: "Spreads", items: spreadF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.shortStrike}/${r.longStrike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
     { key: "leap", label: "LEAPs", items: leapF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `$${r.strike}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
-    { key: "stock", label: "Stocks", items: stockF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `${px(r.avgOpen)} → ${px(r.avgClose)}${r.manualBasis && !r.manualEntry ? " · cost entered by hand" : ""}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
+    { key: "stock", label: "Stocks", items: stockF.closed.map((r) => ({ pnl: r.realizedPnl, date: r.closedAt, sym: r.symbol, strikeLabel: `${px(r.avgOpen)} → ${px(r.avgClose)}${r.manualBasis && !r.manualEntry ? " · cost entered by hand" : ""}${r.schwabLots ? " · Schwab's lots" : ""}`, openedAt: r.openedAt, daysHeld: r.daysHeld })) },
   ];
 
   // Open — current unrealized mark-to-market per bucket.
@@ -101,7 +101,7 @@ export default async function PnlPage() {
     ...coveredF.closed.filter(atSchwab).map((r) => ({ kind: "covered" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
     ...spreadF.closed.filter(atSchwab).map((r) => ({ kind: "spread" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
     ...leapF.closed.filter(atSchwab).map((r) => ({ kind: "leap" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId })),
-    ...stockF.closed.filter(atSchwab).map((r) => ({ kind: "stock" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId, manual: !!(r.manualBasis || r.manualEntry), shares: r.shares })),
+    ...stockF.closed.filter(atSchwab).map((r) => ({ kind: "stock" as const, symbol: r.symbol, openedAt: r.openedAt, closedAt: r.closedAt, realizedPnl: r.realizedPnl, outcome: r.outcome, accountId: r.accountId, manual: !!(r.manualBasis || r.manualEntry), shares: r.shares, costBasis: r.costBasis, closePrice: r.avgClose, schwabLots: r.schwabLots })),
   ];
   const reconcileAccounts = snap.accounts.map((a) => ({ id: a.id, label: `${accountLabel(a)} ${a.mask}` }));
 

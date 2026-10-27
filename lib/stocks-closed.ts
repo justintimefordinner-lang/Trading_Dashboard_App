@@ -6,6 +6,8 @@ import type { ClosedStock, ClosedStockFile } from "./types";
 import { isExampleMode } from "./example-mode";
 import { exampleStockFile } from "./example";
 import { readClosedForView } from "./closed-files";
+import { readLotOverrides } from "./bridge-files";
+import { applyLotOverrides } from "./lot-overrides";
 
 export const STOCKS_CLOSED_PATH = path.join(process.cwd(), "data", "stocks-closed.json");
 
@@ -13,5 +15,8 @@ const EMPTY: ClosedStockFile = { meta: { generatedAt: "", source: "" }, closed: 
 
 export async function getClosedStocks(): Promise<ClosedStockFile> {
   if (await isExampleMode()) return exampleStockFile;
-  return readClosedForView<ClosedStock>("stocks-closed.json", EMPTY);
+  const doc = await readClosedForView<ClosedStock>("stocks-closed.json", EMPTY);
+  // Sales whose lots were taken from Schwab's report in Reconcile.
+  const closed = applyLotOverrides(doc.closed, readLotOverrides());
+  return closed === doc.closed ? doc : { ...doc, closed: closed.sort((a, b) => b.closedAt.localeCompare(a.closedAt)) };
 }

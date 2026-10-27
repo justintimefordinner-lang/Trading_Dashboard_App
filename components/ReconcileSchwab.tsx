@@ -3,9 +3,10 @@
 // P&L header action: reconcile the app's realized P&L against Schwab's own
 // Realized Gain/Loss report. The report is read in the browser (never
 // uploaded), compared by symbol and by month, and every difference gets a
-// plain reason. Nothing here changes a P&L number. The one thing it can write
-// is cost bases for sales the app couldn't cost, taken from the report's lots
-// and saved through the same endpoint the cost-basis prompt uses.
+// plain reason. Nothing changes until a button says so. What the buttons write
+// comes from the report's own lots: cost bases for sales the app couldn't cost,
+// corrections to costs typed by hand, sales the app never saw, and which lots a
+// sale sold where the bridge matched oldest shares first.
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -38,6 +39,7 @@ export function ReconcileSchwab({
   const [applied, setApplied] = useState<number | null>(null);
   const [corrected, setCorrected] = useState<number | null>(null);
   const [added, setAdded] = useState<number | null>(null);
+  const [relotted, setRelotted] = useState<number | null>(null);
   const [includeOld, setIncludeOld] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -58,6 +60,7 @@ export function ReconcileSchwab({
     setApplied(null);
     setCorrected(null);
     setAdded(null);
+    setRelotted(null);
     const parsed = parseSchwabRealized(await file.text());
     if ("error" in parsed) return setErr(parsed.error);
     setFileName(file.name);
@@ -98,6 +101,25 @@ export function ReconcileSchwab({
     }
     setApplying(false);
     setCorrected(ok);
+    router.refresh();
+  }
+
+  // Cost sales the bridge matched oldest-first with the lots Schwab actually sold.
+  async function applyLots() {
+    if (!basis) return;
+    setApplying(true);
+    let ok = 0;
+    for (const c of basis.lotChoices) {
+      const res = await fetch("/api/stocks/lot-override", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: c.symbol, closeDate: c.closeDate, accountId: c.accountId, shares: c.shares, closePrice: c.closePrice, lots: c.lots }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.ok !== false) ok += 1;
+    }
+    setApplying(false);
+    setRelotted(ok);
     router.refresh();
   }
 
@@ -309,6 +331,44 @@ export function ReconcileSchwab({
                         <div className="text-emerald-300">
                           Corrected {corrected} cost {corrected === 1 ? "basis" : "bases"}. The bridge re-books {corrected === 1 ? "it" : "them"} on its next rebuild, within a minute or two.
                         </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Sales the bridge costed oldest-shares-first where Schwab sold other lots */}
+                  {basis && (basis.lotChoices.length > 0 || relotted !== null) && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                      {relotted !== null ? (
+                        <div className="text-emerald-300">
+                          {relotted} {relotted === 1 ? "sale now uses" : "sales now use"} Schwab&apos;s lots. Run Reconcile again to see them agree.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-medium text-amber-200">
+                            Schwab sold different shares than the app assumed in {basis.lotChoices.length} {basis.lotChoices.length === 1 ? "sale" : "sales"} — worth{" "}
+                            {signed(basis.lotChoices.reduce((s, c) => s + c.delta, 0))} of realized P&amp;L
+                          </div>
+                          <p className="mt-1 text-[11px] text-muted">
+                            The app sells your oldest shares first. Schwab sold the tax lots below. The total across the whole position comes out the same, but the
+                            loss or gain lands on different sales. Schwab&apos;s is the one on your tax forms. A later sale of the same stock may then need the same fix.
+                          </p>
+                          <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto tabular text-muted">
+                            {basis.lotChoices.map((c) => (
+                              <li key={c.key}>
+                                <span className="font-semibold text-text" data-ticker={c.symbol}>{c.symbol}</span> {c.shares.toLocaleString()} sh sold {c.closeDate} @ ${c.closePrice.toFixed(2)}: app cost{" "}
+                                {money(c.appCost)}, Schwab&apos;s lots <span className="text-text">{money(c.schwabCost)}</span> · <span className={c.delta >= 0 ? "text-emerald-400" : "text-rose-400"}>{signed(c.delta)}</span>
+                                <div className="pl-3 text-[11px]">
+                                  {c.lots.map((l) => `${l.shares.toLocaleString()} sh @ $${l.costPerShare.toFixed(2)}${l.acquiredDate ? ` (${l.acquiredDate})` : ""}`).join(" · ")}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="mt-2">
+                            <button onClick={applyLots} disabled={applying} className={btn}>
+                              {applying ? "Saving…" : `Use Schwab's lots for ${basis.lotChoices.length === 1 ? "this sale" : `these ${basis.lotChoices.length}`}`}
+                            </button>
+                          </div>
+                        </>
                       )}
                     </div>
                   )}

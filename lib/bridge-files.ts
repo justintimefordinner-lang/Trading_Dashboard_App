@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { BRIDGE_DIR } from "@/lib/bridge-dir";
 import type { BridgeInfo } from "@/lib/bridges";
+import type { LotOverride } from "@/lib/lot-overrides";
 import { writeEnvUpdates } from "@/lib/env-file";
 
 const DEFAULT_CALLBACK = "https://127.0.0.1:8182";
@@ -319,6 +320,34 @@ export function updateManualStockSale(id: string, patch: { costPerShare: number;
   if (patch.acquiredDate && patch.acquiredDate <= row.soldDate) row.acquiredDate = patch.acquiredDate;
   writeManualStockSales(list);
   return true;
+}
+
+// ── Schwab's lots for a sale the bridge matched first-in-first-out. Read by the app
+//    itself when it loads closed stocks (lib/lot-overrides.ts); the bridge never sees it. ──
+const LOT_OVERRIDES_PATH = path.join(process.cwd(), "data", "stock_lot_overrides.json");
+
+export function readLotOverrides(): LotOverride[] {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(LOT_OVERRIDES_PATH, "utf8"));
+    return Array.isArray(parsed) ? (parsed as LotOverride[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Save one sale's lots, replacing any earlier override for the same sale. */
+export function saveLotOverride(o: LotOverride): void {
+  const list = readLotOverrides().filter((x) => x.key !== o.key);
+  list.push(o);
+  fs.mkdirSync(path.dirname(LOT_OVERRIDES_PATH), { recursive: true });
+  fs.writeFileSync(LOT_OVERRIDES_PATH, JSON.stringify(list, null, 2));
+}
+
+/** Remove a sale's override; it goes back to the bridge's first-in-first-out cost. */
+export function deleteLotOverride(key: string): void {
+  const list = readLotOverrides();
+  const kept = list.filter((x) => x.key !== key);
+  if (kept.length !== list.length) fs.writeFileSync(LOT_OVERRIDES_PATH, JSON.stringify(kept, null, 2));
 }
 
 // ── Quant CSP scan: write-only trigger + one-way status read ──

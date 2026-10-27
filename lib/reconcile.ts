@@ -26,6 +26,9 @@ export interface AppClosed {
   accountId?: string;
   manual?: boolean; // a hand-entered cost basis or a hand-added sale: says nothing about where history begins
   shares?: number; // stock only: lets a sale be lined up with Schwab's lots
+  costBasis?: number; // stock only: what the app says the sold shares cost
+  closePrice?: number; // stock only: the app's sale price
+  schwabLots?: boolean; // stock only: cost already taken from Schwab's lots
 }
 
 export interface SymbolDiff {
@@ -65,7 +68,7 @@ export function reconcile(report: SchwabReport, records: AppClosed[], accountId:
   // Where the app's own history begins: the earliest date on any trade it
   // rebuilt from Schwab's feeds. Hand-entered records don't count — a sale
   // added from 2019 doesn't mean the feeds reach 2019.
-  const known = forAccount.filter((r) => !r.manual).flatMap((r) => [r.openedAt, r.closedAt]).filter((d): d is string => !!d);
+  const known = forAccount.filter((r) => !r.manual && !r.schwabLots).flatMap((r) => [r.openedAt, r.closedAt]).filter((d): d is string => !!d);
   const historyStart = known.length ? known.reduce((a, b) => (a < b ? a : b)) : null;
   const before = historyStart ? report.lots.filter((l) => l.closed < historyStart) : [];
   const lots = historyStart ? report.lots.filter((l) => l.closed >= historyStart) : report.lots;
@@ -220,8 +223,23 @@ export interface MissingSale {
   beforeHistory: boolean;
 }
 
+/** A sale the bridge costed first-in-first-out while Schwab sold other lots. */
+export interface LotChoice {
+  key: string;
+  symbol: string;
+  closeDate: string;
+  accountId: string | null;
+  shares: number;
+  closePrice: number;
+  appCost: number;
+  schwabCost: number;
+  delta: number; // realized P&L with Schwab's lots − with the app's
+  lots: { shares: number; costPerShare: number; acquiredDate: string | null }[];
+}
+
 export interface BasisReview {
   proposals: BasisProposal[];
+  lotChoices: LotChoice[];
   unmatched: UnresolvedSale[];
   corrections: BasisCorrection[];
   checked: { total: number; agree: number; differ: number; notFound: NotFound[] };
@@ -269,18 +287,20 @@ export function proposeCostBasis(
     let cost = 0;
     let acquired: string | null = null;
     const taken: { lot: Lot; qty: number }[] = [];
+    const lotsTaken: { shares: number; costPerShare: number; acquiredDate: string | null }[] = [];
     for (const l of candidates(sym, date, price)) {
       if (got >= shares - 1e-4) break;
       const q = Math.min(l.left, shares - got);
       got += q;
       cost += q * l.cps;
       taken.push({ lot: l, qty: q });
+      lotsTaken.push({ shares: q, costPerShare: l.cps, acquiredDate: l.opened });
       if (l.opened && (!acquired || l.opened < acquired)) acquired = l.opened;
     }
     const complete = Math.abs(got - shares) <= 1e-3;
     if (!complete && !partial) return null;
     for (const t of taken) t.lot.left -= t.qty;
-    return { got, cost, acquired };
+    return { got, cost, acquired, lots: lotsTaken };
   };
 
   const match = (u: UnresolvedSale): BasisProposal | null => {
@@ -338,11 +358,48 @@ export function proposeCostBasis(
   }
   corrections.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 
-  // 3. sales the app rebuilt itself. A hand-entered record was handled above.
+  // 3. sales the app rebuilt itself. A hand-entered record was handled above. The
+  //    bridge matches oldest shares first and may split one sale into several
+  //    records, so a sale is all of a symbol's records closed that day in one account.
+  //    Where Schwab sold other lots, say so: same sale, different cost.
+  const sales = new Map<string, { symbol: string; closeDate: string; accountId: string | null; shares: number; cost: number; proceeds: number; costed: boolean; schwabLots: boolean }>();
   for (const r of records) {
     if (r.kind !== "stock" || r.manual || !r.shares) continue;
-    take(r.symbol.toUpperCase(), r.closedAt, r.shares, null, true);
+    const symbol = r.symbol.toUpperCase();
+    const closeDate = r.closedAt.slice(0, 10);
+    const key = `${symbol}|${closeDate}|${r.accountId ?? ""}`;
+    const s = sales.get(key) ?? { symbol, closeDate, accountId: r.accountId ?? null, shares: 0, cost: 0, proceeds: 0, costed: true, schwabLots: false };
+    s.shares += r.shares;
+    if (r.costBasis == null || r.closePrice == null) s.costed = false;
+    else {
+      s.cost += r.costBasis;
+      s.proceeds += r.closePrice * r.shares;
+    }
+    if (r.schwabLots) s.schwabLots = true;
+    sales.set(key, s);
   }
+  const lotChoices: LotChoice[] = [];
+  for (const [key, s] of sales) {
+    const price = s.costed ? s.proceeds / s.shares : null;
+    const m = take(s.symbol, s.closeDate, s.shares, price) ?? take(s.symbol, s.closeDate, s.shares, price, true);
+    if (!m || !s.costed || s.schwabLots || Math.abs(m.got - s.shares) > 1e-3) continue;
+    const delta = Math.round((s.cost - m.cost) * 100) / 100;
+    // Schwab's cost carries the buy commissions; a different lot is a real gap, fees aren't.
+    if (Math.abs(delta) <= Math.max(TOLERANCE, m.cost * 0.001)) continue;
+    lotChoices.push({
+      key,
+      symbol: s.symbol,
+      closeDate: s.closeDate,
+      accountId: s.accountId,
+      shares: s.shares,
+      closePrice: Math.round((price as number) * 10_000) / 10_000,
+      appCost: Math.round(s.cost * 100) / 100,
+      schwabCost: Math.round(m.cost * 100) / 100,
+      delta,
+      lots: m.lots.map((l) => ({ ...l, costPerShare: Math.round(l.costPerShare * 10_000) / 10_000 })),
+    });
+  }
+  lotChoices.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 
   // What's left. An entry that couldn't be lined up may BE one of these lots, so
   // anything near it stays out: adding it would count that sale twice.
@@ -380,5 +437,5 @@ export function proposeCostBasis(
   }
   missing.sort((a, b) => Math.abs(b.gain) - Math.abs(a.gain));
 
-  return { proposals, unmatched, corrections, checked: { total, agree, differ: corrections.length, notFound }, missing };
+  return { proposals, lotChoices, unmatched, corrections, checked: { total, agree, differ: corrections.length, notFound }, missing };
 }
