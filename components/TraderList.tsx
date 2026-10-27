@@ -4,7 +4,7 @@
 // buttons. A verdict is written to the app's own data folder; the trader picks
 // it up on its next pass and stops pushing that suggestion. Nothing here
 // places an order.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { Amt } from "@/components/privacy";
@@ -24,12 +24,36 @@ const STATUS_CLS: Record<SuggestionStatus, string> = {
 };
 const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const when = (iso: string) => new Date(iso).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+const ACCOUNT_KEY = "trader-account"; // the last account picked, per browser
 
 export function TraderList({ initial }: { initial: Suggestion[] }) {
   const router = useRouter();
   const [rows, setRows] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
   const [showOld, setShowOld] = useState(false);
+  // Account bubbles, in the order the rows arrive (dashboard order). "" is all.
+  const accounts = [...new Set(rows.map((s) => s.account).filter((a): a is string => !!a))];
+  const [account, setAccount] = useState("");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(ACCOUNT_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- browser storage is only readable after mount
+      if (saved) setAccount(saved);
+    } catch {
+      // storage blocked: start on all accounts
+    }
+  }, []);
+  const pick = (a: string) => {
+    setAccount(a);
+    try {
+      localStorage.setItem(ACCOUNT_KEY, a);
+    } catch {
+      // not remembered; the pick still applies
+    }
+  };
+  // A remembered account that has no suggestions any more falls back to all.
+  const active = accounts.includes(account) ? account : "";
+  const shown = active ? rows.filter((s) => s.account === active) : rows;
 
   async function mark(key: string, status: SuggestionStatus) {
     setBusy(key);
@@ -47,8 +71,8 @@ export function TraderList({ initial }: { initial: Suggestion[] }) {
   }
 
   // Rows arrive ordered by account, then new puts (ranked queue order), closes, calls, notes.
-  const live = rows.filter((s) => s.status === "new");
-  const judged = rows.filter((s) => s.status !== "new");
+  const live = shown.filter((s) => s.status === "new");
+  const judged = shown.filter((s) => s.status !== "new");
   // Queue position of each open new put within its account: #1 gets capital first.
   const queuePos = new Map<string, number>();
   const seen = new Map<string, number>();
@@ -108,8 +132,28 @@ export function TraderList({ initial }: { initial: Suggestion[] }) {
     </Card>
   );
 
+  const chip = (a: string, label: string) => (
+    <button
+      key={a || "all"}
+      onClick={() => pick(a)}
+      aria-pressed={active === a}
+      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset transition-colors ${
+        active === a ? "bg-emerald-500/20 text-emerald-300 ring-emerald-500/40" : "bg-surface-2 text-muted ring-border active:bg-surface"
+      }`}
+    >
+      {label}
+      <span className="ml-1 tabular opacity-70">{(a ? rows.filter((s) => s.account === a) : rows).filter((s) => s.status === "new").length}</span>
+    </button>
+  );
+
   return (
     <>
+      {accounts.length > 1 && (
+        <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Show suggestions for">
+          {chip("", "All accounts")}
+          {accounts.map((a) => chip(a, a))}
+        </div>
+      )}
       {live.length === 0 && <Card className="px-4 py-4 text-center text-xs text-muted">Nothing suggested right now. Closes are checked every 15 minutes; new entries at the top of each entry hour, or on Run now.</Card>}
       <div className="space-y-2.5 tablet:grid tablet:grid-cols-2 tablet:gap-3 tablet:space-y-0">
         {live.map((s) => (
