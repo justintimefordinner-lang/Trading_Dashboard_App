@@ -602,12 +602,12 @@ function ImportDialog({ account, onClose, onImported }: { account: ManualAccount
               <p className="mt-2 text-muted">
                 Optional: <span className="text-text">{FIELD_LABEL.openedAt}</span> for days in trade, and{" "}
                 <span className="text-text">{FIELD_LABEL.costTotal}</span> if the file has a total instead of a per-share price.
-                A negative quantity, or a Side column, marks a sold option. A cash row (Schwab&apos;s &ldquo;Cash &amp; Cash
+                A Side column, or a negative quantity, marks a sold option; when the file writes sold contracts as negative, a positive one is bought. A cash row (Schwab&apos;s &ldquo;Cash &amp; Cash
                 Investments&rdquo;, Fidelity&apos;s core position) sets the account&apos;s free cash from its value column.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <label className={labelClass} htmlFor="import-default-side">If the file doesn&apos;t say, options are</label>
+              <label className={labelClass} htmlFor="import-default-side">If nothing in the file says, options are</label>
               <select id="import-default-side" value={opts.defaultOptionSide} onChange={(e) => setOpts({ defaultOptionSide: e.target.value as "short" | "long" })} className={`${inputClass} w-auto py-1`}>
                 <option value="short">sold (short)</option>
                 <option value="long">bought (long)</option>

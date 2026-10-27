@@ -345,7 +345,8 @@ export function detectMapping(headers: string[], sample: string[][]): Mapping {
 
 // ---- rows -> positions ---------------------------------------------------------
 export interface ImportOptions {
-  // When the file has no side column and quantities are unsigned, what an option row is.
+  // When nothing in the file says bought or sold — no side column, no negative
+  // quantities, no negative values on option rows — what an option row is.
   defaultOptionSide: "short" | "long";
 }
 
@@ -385,6 +386,16 @@ export function convertRows(rows: string[][], map: Mapping, opts: ImportOptions,
   let cash = 0;
   let cashRows = 0;
   const get = (r: string[], f: Field) => (map[f] != null ? (r[map[f] as number] ?? "").trim() : "");
+  // Does the file sign its numbers? A positions export that writes sold contracts
+  // as -1 means a plain 1 is a bought one (a LEAP, a long put), not "unspecified".
+  // Failing that, some exports keep quantities unsigned but carry a sold
+  // option's market value or cost as negative. Only option rows count: a margin
+  // balance or a short stock line says nothing about how options are written.
+  const optionRow = (r: string[]) => !!(parseContract(get(r, "symbol")) ?? parseContract(get(r, "description"))) || parseAssetType(get(r, "assetType")) === "option";
+  const neg = (r: string[], f: Field) => (parseNumber(get(r, f)) ?? 0) < 0;
+  const signedQty = rows.some((r) => neg(r, "quantity"));
+  const signedValue = !signedQty && rows.some((r) => optionRow(r) && (neg(r, "marketValue") || neg(r, "costTotal")));
+  const valueSign = (r: string[]) => parseNumber(get(r, "marketValue")) || parseNumber(get(r, "costTotal")) || 0;
 
   rows.forEach((r, idx) => {
     const line = firstLine + idx;
@@ -473,6 +484,8 @@ export function convertRows(rows: string[][], map: Mapping, opts: ImportOptions,
     }
     let side = parseSide(get(r, "side"));
     if (!side && qtyRaw < 0) side = "short";
+    if (!side && qtyRaw > 0 && signedQty) side = "long";
+    if (!side && signedValue && valueSign(r) !== 0) side = valueSign(r) < 0 ? "short" : "long";
     if (!side && map.side == null && qtyRaw > 0) side = opts.defaultOptionSide;
     if (!side) {
       if (map.side == null) missing.add("side");
