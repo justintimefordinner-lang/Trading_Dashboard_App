@@ -1,6 +1,15 @@
 // Shape of data/am_report.json (written by the Python am_report engine). Client-safe
 // — no fs — so both the view and the server loader can import it.
 
+/** The "EMA cloud" read: 8 EMA over 21 EMA on the daily and on the weekly bars.
+ *  Information, never a gate (as an entry filter it cost the wheel 15 points a year
+ *  in the backtest). null where the history is too short; absent on older reports. */
+export interface AmClouds {
+  daily: boolean | null;
+  weekly: boolean | null;
+  green: boolean | null; // both clouds green
+}
+
 export interface AmTrend {
   uptrend: boolean;
   ret18mo: number;
@@ -9,6 +18,7 @@ export interface AmTrend {
   bollUp: boolean;
   pctAbove200: number;
   strength: number;
+  clouds?: AmClouds | null;
 }
 
 export interface AmChain {

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Card, PageHeader, SectionTitle, Pill } from "@/components/ui";
 import { ResearchView } from "@/components/ResearchView";
+import { SensaSiteLinks } from "@/components/SensaLinks";
+import { SENSA_URL } from "@/lib/sensa";
 import { getApproved } from "@/lib/approved";
 import { getResearch } from "@/lib/research";
 import { getSnapshot } from "@/lib/snapshot";
@@ -164,6 +166,19 @@ export default async function ResearchPage({
           </Card>
         </Link>
       )}
+
+      {/* Sensa Market — the research site's own screens, as outbound links (no login, no fetch).
+          Per-name pages (chains, Greeks, flow, CSP builder) sit on Chart a Ticker and on each Quant pick. */}
+      <Card className="mt-2 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">Sensa Market</div>
+            <div className="text-[11px] text-muted">Opens in a new tab · hold any ticker for its chains, Greeks, flow and CSP builder there</div>
+          </div>
+          <a href={SENSA_URL + "/dashboard"} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm font-medium text-sky-300 active:opacity-70">Open ›</a>
+        </div>
+        <SensaSiteLinks pages={["screener", "sector-heatmap", "cashflow", "greeks-analytics", "strategies", "inside-trade", "institutional-investor"]} label={null} className="mt-2" />
+      </Card>
 
       <ResearchView data={data} symbols={sortedApproved} holdings={holdings} initialVehicle={initialVehicle} />
 

@@ -22,6 +22,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { Card } from "@/components/ui";
+import { SensaTickerLinks } from "@/components/SensaLinks";
 import { fetchChart, type ChartData } from "@/lib/chart-api";
 
 const UP_COLOR = "#34d399";
@@ -307,6 +308,8 @@ export function SecurityChart({ watchlist, initialSymbol }: { watchlist: string[
             </span>
             <span className="tabular shrink-0">${data.spotPrice.toFixed(2)}</span>
           </div>
+          {/* The same name on Sensa Market, one tap away from the chart the long-press lands on. */}
+          <SensaTickerLinks symbol={data.symbol} className="mb-1.5 px-2" />
           <div className="mb-1 flex flex-wrap items-center gap-3 px-2 text-xs text-muted">
             <span className="flex items-center gap-1">
               <span className="inline-block h-0.5 w-3" style={{ backgroundColor: SMA50_COLOR }} />

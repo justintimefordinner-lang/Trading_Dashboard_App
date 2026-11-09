@@ -7,6 +7,7 @@ import { MesCard, VixIndicators } from "@/components/VixIndicators";
 import { getMesQuote } from "@/lib/mes-data";
 import { appFeed, type FeedStatus } from "@/lib/refresh-status";
 import { DataRefresh } from "@/components/DataRefresh";
+import { SensaTickerLinks } from "@/components/SensaLinks";
 import { getSnapshot } from "@/lib/snapshot";
 import { getSelectedAccount } from "@/lib/account";
 import { getVixSnapshot } from "@/lib/vix-data";
@@ -60,6 +61,7 @@ export default async function VixPage() {
           }
           right={<BackLink />}
         />
+        <SensaTickerLinks symbol="VIX" pages={["overview", "chart-analysis", "seasonals"]} label="Sensa Market · VIX" className="mt-2" />
 
         {!vix ? (
           <Card className="mt-4 px-4 py-5 text-center text-sm text-muted">

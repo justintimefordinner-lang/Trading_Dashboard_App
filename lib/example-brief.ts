@@ -62,6 +62,7 @@ function trendFor(score: number): AmTrend {
     bollUp: score >= 70,
     pctAbove200: +((score - 50) * 0.6).toFixed(1),
     strength: score,
+    clouds: { daily: score >= 55, weekly: score >= 62, green: score >= 62 },
   };
 }
 

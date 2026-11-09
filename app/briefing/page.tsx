@@ -7,6 +7,7 @@ import { computeHoldings, underweightTickers } from "@/lib/holdings";
 import { getRefreshStatus } from "@/lib/refresh-status";
 import { DataRefresh } from "@/components/DataRefresh";
 import { BriefingRefresh } from "@/components/BriefingRefresh";
+import { SensaSiteLinks } from "@/components/SensaLinks";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,8 @@ export default async function BriefingPage() {
         }
         right={report ? <BriefingRefresh /> : undefined}
       />
+      {/* The market-wide reads Sensa Market keeps that the Brief does not: who is buying. */}
+      <SensaSiteLinks pages={["cashflow", "sector-heatmap", "inside-trade", "institutional-investor", "political-trades"]} className="mt-2" />
       {report ? (
         <AmReportView report={report} underweight={underweight} book={book} />
       ) : (

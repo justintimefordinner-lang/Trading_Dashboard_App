@@ -22,6 +22,14 @@ built-in demo dataset, so you can explore the whole UI immediately.
   50/200-day SMA with golden/death cross markers, MACD and RSI panes, plus call/put walls for
   names you hold. Bars come from Yahoo Finance via the app's own `/api/chart` route. Hold any
   ticker anywhere in the app for 1.8 seconds to open it there
+- **Sensa Market links** — outbound links (new tab, no login, nothing fetched) into
+  sensamarket.com: the charted name's overview, chains, Greeks, open interest, flow and CSP
+  builder on Chart a Ticker and on each Quant pick; the site's screener, sector heat map,
+  option flow and insider pages from Research, the Brief and the VIX page
+- **Quant CSP scan** — the wheel study's rule over the approved list, the portfolio hedge, and
+  two reads shown as information rather than rules: each pick's IV (the 4% target already
+  demands 50%+) and the name's daily/weekly EMA clouds (gating on green cost 15 points a year
+  in the backtest)
 - **Portfolio risk** — sector concentration against a per-sector cap, across every account.
   Sectors come from the bridge's `data/sectors.json` (Yahoo Finance — Schwab's API has none);
   correct any by hand under its `overrides` map

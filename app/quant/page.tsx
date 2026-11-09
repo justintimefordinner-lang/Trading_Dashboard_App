@@ -3,6 +3,7 @@ import { BackLink, Card, PageHeader, Pill, SectionTitle } from "@/components/ui"
 import { Amt, ShowAmounts } from "@/components/privacy";
 import { QuantScanButton } from "@/components/QuantScanButton";
 import { QuantSettings } from "@/components/QuantSettings";
+import { SensaTickerLinks } from "@/components/SensaLinks";
 import { extraMarginFor, readQuantSettings, STUDY_DEFAULTS } from "@/lib/quant-settings";
 import { byTraderRank, rankPick, type QuantRank } from "@/lib/quant-rank";
 import { swapPlan, SWAP_EDGE, type SwapPlan } from "@/lib/quant-swap";
@@ -51,6 +52,19 @@ function ErMark({ row, exp }: { row: QuantRow; exp: string | undefined }) {
   const f = erFlag(row, exp);
   if (!f) return null;
   return <sup className={`ml-0.5 text-[7px] font-bold uppercase ${f === "spans" ? "text-rose-400" : "text-orange-400"}`}>ER</sup>;
+}
+
+// The "EMA cloud" read from the Brief (8 over 21 EMA, daily and weekly). Information,
+// never a gate: as an entry filter it took the wheel from 47.6% to 32.0% a year in the
+// backtest and made the drawdown worse, because the clouds turn red exactly when the
+// wheel does its best work (selling puts into fear, taking assignment near lows).
+function CloudsFlag({ b }: { b: AmBoardRow | null }) {
+  const c = b?.trend.clouds;
+  if (!c || c.daily == null || c.weekly == null) return null;
+  const word = (v: boolean) => (v ? "green" : "red");
+  const title = `EMA clouds (8 over 21): daily ${word(c.daily)}, weekly ${word(c.weekly)}. Information only — gating entries on green clouds cost 15 points a year in the backtest.`;
+  if (c.green) return <Flag tone="muted" title={title}>clouds green</Flag>;
+  return <Flag tone="amber" title={title}>{c.daily === c.weekly ? "clouds red" : c.daily ? "weekly cloud red" : "daily cloud red"}</Flag>;
 }
 
 // The Brief's tier + score for a name, as it shows on the CSP board.
@@ -119,9 +133,11 @@ function PickCard({ row, fit, P, brief, rank }: { row: QuantRow; fit: QuantFit |
         <div><span className="text-muted">OI</span> <span className="text-text">{p.oi.toLocaleString()}</span></div>
         <div><span className="text-muted">Spread</span> <span className={p.spreadPct != null && p.spreadPct > 15 ? "text-amber-300" : "text-text"}>{p.spreadPct != null ? pct(p.spreadPct, 0) : "—"}</span></div>
         <div><span className="text-muted">Close at</span> <span className="text-text">${((p.fill ?? p.mark) / 2).toFixed(2)}</span></div>
+        <div title="The put's implied volatility from the chain. Shown because the 'IV above 50%' rule going around is already inside the 4% target: in the backtest an IV floor at 50% skipped zero entries."><span className="text-muted">IV</span> <span className={p.iv != null && p.iv < 0.5 ? "text-amber-300" : "text-text"}>{p.iv != null ? pct(p.iv * 100, 0) : "—"}</span></div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <CloudsFlag b={brief} />
         {fit && (
           <Flag tone={fit.contracts > 0 ? "sky" : "muted"} title={`How many of this put the rules allow right now: the smallest of free cash, room under the ${money0(fit.perTickerCap)} per-name cap (${money0(fit.committed)} already in this name) and room under buying power, divided by the ${money0(p.collateral)} one contract needs`}>
             {fit.contracts > 0 ? (
@@ -137,6 +153,7 @@ function PickCard({ row, fit, P, brief, rank }: { row: QuantRow; fit: QuantFit |
         {fit?.held && !fit.full && <Flag tone="muted" title={`${money0(fit.committed)} already in this name`}>already held · add</Flag>}
         {fit?.cashShort && <Flag tone="rose" title="Free cash (after margin allowance and collateral already pledged) can't secure one contract">cash short</Flag>}
         {p.oi < 200 && <Flag tone="muted" title="Thin open interest">thin</Flag>}
+        <SensaTickerLinks symbol={row.sym} pages={["build/cash-secured-put", "chains", "optionFlow"]} label={null} className="ml-auto" />
       </div>
     </Card>
   );
@@ -264,6 +281,7 @@ export default async function QuantPage({ searchParams }: { searchParams: Promis
             <li>· <span className="text-text">Close at {P?.closeAtPct ?? 50}%</span> of the credit, even late in the put&apos;s life. Take assignment; buy a ~0.75Δ LEAPS on it.</li>
             <li>· Up to <span className="text-text">{P ? Math.round(P.maxPerTicker * 100) : 10}% of buying power per name</span> (a {P ? Math.round((P.maxPerTicker + P.tickerBand) * 100) : 15}% stretch allocation lets one more contract on when a name is under its cap). {P.vixMargin ? "Margin allowance scales with the VIX: 0 under 20, then 5% per 5 points, capped at 35%." : "VIX margin allowance off: cash-secured only (the study used the allowance)."}</li>
             <li>· When cash is short, names go in the <span className="text-text">Auto Trader&apos;s order</span>: no earnings inside the put first, then its rank. The trader sells the study&apos;s pick and follows these sizing settings.</li>
+            <li>· <span className="text-text">Shown, not rules:</span> each pick&apos;s IV and the name&apos;s EMA clouds. Backtested (Nov 2026): an IV floor at 50% skipped nothing, since the 4% target already demands it; selling only under green daily and weekly clouds cut the return from 47.6% to 32.0% a year and made the drawdown worse.</li>
           </ul>
         </Card>
 
